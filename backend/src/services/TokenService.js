@@ -129,13 +129,45 @@ class TokenService {
    */
   async deleteToken(id) {
     try {
+      // 先删除相关的 token_settings
+      const { error: settingsError } = await supabase
+        .from('token_settings')
+        .delete()
+        .eq('token_id', id);
+      
+      if (settingsError) {
+        logger.error(`删除Token设置失败: ${JSON.stringify(settingsError)}`);
+        // 继续尝试删除其他关联数据
+      }
+
+      // 删除相关的 task_executions
+      const { error: executionsError } = await supabase
+        .from('task_executions')
+        .delete()
+        .eq('token_id', id);
+      
+      if (executionsError) {
+        logger.error(`删除任务执行记录失败: ${JSON.stringify(executionsError)}`);
+      }
+
+      // 删除相关的 connections
+      const { error: connectionsError } = await supabase
+        .from('connections')
+        .delete()
+        .eq('token_id', id);
+      
+      if (connectionsError) {
+        logger.error(`删除连接记录失败: ${JSON.stringify(connectionsError)}`);
+      }
+
+      // 最后删除 token
       const { error } = await supabase
         .from('tokens')
         .delete()
         .eq('id', id);
 
       if (error) {
-        logger.error(`删除Token失败: ${error.message}`);
+        logger.error(`删除Token失败: ${JSON.stringify(error)}`);
         throw error;
       }
 

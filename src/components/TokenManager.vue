@@ -133,6 +133,7 @@ import { ref, h } from "vue";
 import { useMessage, useDialog, NIcon } from "naive-ui";
 import { useTokenStore } from "@/stores/tokenStore";
 import { useGameRolesStore } from "@/stores/gameRoles";
+import apiService from "@/services/apiService";
 import {
   Refresh,
   Download,
@@ -463,7 +464,7 @@ const refreshTokenFromUrl = async (roleId, tokenData) => {
         }
 
         // 更新Token
-        localTokenStore.updateGameToken(roleId, {
+        await apiService.updateToken(roleId, {
           token: data.token,
           lastUsed: new Date().toISOString(),
         });
@@ -478,67 +479,253 @@ const refreshTokenFromUrl = async (roleId, tokenData) => {
   });
 };
 
-const exportTokens = () => {
+const exportTokens = async () => {
   try {
-    const tokenData = localTokenStore.exportTokens();
-    const dataStr = JSON.stringify(tokenData, null, 2);
+    // 检查是否使用后端API
+    const useBackend = await apiService.shouldUseBackend();
+    
+    let exportData = {
+      version: "2.0",
+      exportedAt: new Date().toISOString(),
+      tokens: [],
+      tokenSettings: [],
+      taskTemplates: [],
+      scheduledTasks: [],
+      batchSettings: null
+    };
+    
+    if (useBackend) {
+      // 从后端获取所有数据
+      const [tokensResult, settingsResult, templatesResult, tasksResult] = await Promise.all([
+        apiService.getTokens(),
+        apiService.getAllTokenSettings(),
+        apiService.getTaskTemplates(),
+        apiService.getTasks()
+      ]);
+      
+      // Token 列表
+      exportData.tokens = tokensResult.success ? (tokensResult.data || []) : [];
+      
+      // Token 设置
+      exportData.tokenSettings = settingsResult.success ? (settingsResult.data || []) : [];
+      
+      // 任务模板
+      exportData.taskTemplates = templatesResult.success ? (templatesResult.data || []) : [];
+      
+      // 定时任务
+      exportData.scheduledTasks = tasksResult.success ? (tasksResult.data || []) : [];
+      
+    } else {
+      // 本地模式
+      exportData.tokens = tokenStore.gameTokens || [];
+    }
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
     const dataBlob = new Blob([dataStr], { type: "application/json" });
 
     const link = document.createElement("a");
     link.href = URL.createObjectURL(dataBlob);
-    link.download = `tokens_backup_${new Date().toISOString().split("T")[0]}.json`;
+    link.download = `xyzw_full_backup_${new Date().toISOString().split("T")[0]}.json`;
     link.click();
 
-    message.success("Token数据已导出");
+    message.success(`导出成功: ${exportData.tokens.length} 个Token, ${exportData.tokenSettings.length} 个设置, ${exportData.taskTemplates.length} 个模板, ${exportData.scheduledTasks.length} 个定时任务`);
   } catch (error) {
+    console.error('导出失败:', error);
     message.error("导出失败: " + error.message);
   }
 };
 
-const importTokens = ({ file }) => {
+const importTokens = async ({ file }) => {
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
-      const tokenData = JSON.parse(e.target.result);
-      const result = localTokenStore.importTokens(tokenData);
-
-      if (result.success) {
-        message.success(result.message);
-        // 刷新游戏角色数据
+      const importData = JSON.parse(e.target.result);
+      
+      // 检查是否使用后端API
+      const useBackend = await apiService.shouldUseBackend();
+      
+      if (useBackend) {
+        let importedTokens = 0;
+        let importedSettings = 0;
+        let importedTemplates = 0;
+        let importedTasks = 0;
+        
+        // 1. 导入 Token 列表
+        const tokensToImport = importData.tokens || importData.gameTokens;
+        if (tokensToImport) {
+          const tokensArray = Array.isArray(tokensToImport) 
+            ? tokensToImport 
+            : Object.entries(tokensToImport).map(([id, data]) => ({ id, ...data }));
+          
+          for (const data of tokensArray) {
+            const tokenInfo = {
+              id: data.id,
+              name: data.name || data.roleName || '',
+              token: data.token,
+              ws_url: data.wsUrl || data.ws_url || null,
+              server: data.server || '',
+              remark: data.remark || '',
+              import_method: data.import_method || data.importMethod || 'import',
+              source_url: data.source_url || data.sourceUrl || null,
+              avatar: data.avatar || '',
+              is_active: data.is_active !== false
+            };
+            
+            // 检查是否已存在
+            const existingToken = tokenStore.gameTokens.find(t => t.id === tokenInfo.id);
+            if (!existingToken) {
+              const result = await apiService.createToken(tokenInfo);
+              if (result.success) {
+                importedTokens++;
+              }
+            }
+          }
+        }
+        
+        // 2. 导入任务模板
+        if (importData.taskTemplates && Array.isArray(importData.taskTemplates)) {
+          for (const template of importData.taskTemplates) {
+            if (template.name && template.settings) {
+              const result = await apiService.createTaskTemplate({
+                name: template.name,
+                settings: template.settings
+              });
+              if (result.success) {
+                importedTemplates++;
+              }
+            }
+          }
+        }
+        
+        // 3. 导入 Token 设置
+        if (importData.tokenSettings && Array.isArray(importData.tokenSettings)) {
+          for (const setting of importData.tokenSettings) {
+            const tokenId = setting.token_id || setting.tokenId;
+            if (tokenId && setting.settings) {
+              const result = await apiService.saveTokenSettings(
+                tokenId, 
+                setting.settings, 
+                setting.template_id || setting.templateId
+              );
+              if (result.success) {
+                importedSettings++;
+              }
+            }
+          }
+        }
+        
+        // 4. 导入定时任务
+        if (importData.scheduledTasks && Array.isArray(importData.scheduledTasks)) {
+          for (const task of importData.scheduledTasks) {
+            if (task.name) {
+              const taskData = {
+                id: task.id,
+                name: task.name,
+                type: task.type || 'daily',
+                token_ids: task.token_ids || task.selectedTokens || [],
+                run_type: task.run_type || task.runType || 'daily',
+                run_time: task.run_time || task.runTime || '00:00',
+                cron_expression: task.cron_expression || task.cronExpression || '0 0 * * *',
+                settings: {
+                  selectedTasks: task.settings?.selectedTasks || task.selectedTasks || []
+                },
+                is_active: task.is_active !== false && task.enabled !== false
+              };
+              const result = await apiService.createTask(taskData);
+              if (result.success) {
+                importedTasks++;
+              }
+            }
+          }
+        }
+        
+        // 刷新 token 列表
+        const tokensResult = await apiService.getTokens();
+        if (tokensResult.success) {
+          tokenStore.gameTokens.value = [];
+          tokensResult.data.forEach((token) => {
+            tokenStore.gameTokens.value.push({
+              id: token.id,
+              name: token.name,
+              token: token.token,
+              wsUrl: token.ws_url,
+              server: token.server,
+              remark: token.remark,
+              importMethod: token.import_method,
+              sourceUrl: token.source_url,
+              avatar: token.avatar,
+              isActive: token.is_active,
+              createdAt: token.created_at,
+              updatedAt: token.updated_at
+            });
+          });
+        }
+        
+        message.success(`导入成功: ${importedTokens} 个Token, ${importedSettings} 个设置, ${importedTemplates} 个模板, ${importedTasks} 个定时任务`);
         gameRolesStore.fetchGameRoles();
       } else {
-        message.error(result.message);
+        // 本地导入（旧逻辑）
+        const result = tokenStore.importTokens ? tokenStore.importTokens(importData) : { success: false, message: '导入失败' };
+        if (result.success) {
+          message.success(result.message);
+          gameRolesStore.fetchGameRoles();
+        } else {
+          message.error(result.message);
+        }
       }
     } catch (error) {
+      console.error('导入失败:', error);
       message.error("导入失败：文件格式错误");
     }
   };
   reader.readAsText(file.file);
 };
 
-const cleanExpiredTokens = () => {
+const cleanExpiredTokens = async () => {
   dialog.info({
     title: "清理过期Token",
     content: "确定要清理超过24小时未使用的Token吗？",
     positiveText: "确定",
     negativeText: "取消",
-    onPositiveClick: () => {
-      const cleanedCount = localTokenStore.cleanExpiredTokens();
-      message.success(`已清理 ${cleanedCount} 个过期Token`);
+    onPositiveClick: async () => {
+      const useBackend = await apiService.shouldUseBackend();
+      if (useBackend) {
+        // 后端暂不支持批量清理过期Token，需要手动处理
+        message.info("后端模式暂不支持自动清理过期Token");
+      } else {
+        // 本地模式
+        const cleanedCount = tokenStore.cleanExpiredTokens ? tokenStore.cleanExpiredTokens() : 0;
+        message.success(`已清理 ${cleanedCount} 个过期Token`);
+      }
     },
   });
 };
 
-const clearAllTokens = () => {
+const clearAllTokens = async () => {
   dialog.error({
     title: "清除所有Token",
     content:
       "确定要清除所有游戏Token吗？这将断开所有WebSocket连接。此操作不可恢复！",
     positiveText: "确定清除",
     negativeText: "取消",
-    onPositiveClick: () => {
-      localTokenStore.clearAllGameTokens();
-      message.success("所有游戏Token已清除");
+    onPositiveClick: async () => {
+      const useBackend = await apiService.shouldUseBackend();
+      if (useBackend) {
+        // 后端模式：逐个删除
+        let deletedCount = 0;
+        for (const token of tokenStore.gameTokens) {
+          const result = await apiService.deleteToken(token.id);
+          if (result.success) {
+            deletedCount++;
+          }
+        }
+        tokenStore.gameTokens.value = [];
+        message.success(`已清除 ${deletedCount} 个Token`);
+      } else {
+        // 本地模式
+        tokenStore.clearAllGameTokens ? tokenStore.clearAllGameTokens() : (tokenStore.gameTokens.value = []);
+        message.success("所有游戏Token已清除");
+      }
     },
   });
 };
