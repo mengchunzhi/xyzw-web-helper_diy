@@ -19,7 +19,6 @@
         v-model:visible="showImportForm"
         width="40rem"
         :footer="false"
-        :default-visible="!tokenStore.hasTokens"
       >
         <template #title>
           <h2>
@@ -1801,8 +1800,9 @@ onMounted(async () => {
   // 加载完成
   isLoading.value = false;
 
-  // 如果没有token且没有URL参数，显示导入表单
-  if (!tokenStore.hasTokens && !props.token && !props.api) {
+  // 如果有URL参数，显示导入表单
+  // 否则显示空状态页面（让用户选择添加或导入）
+  if (props.token || props.api) {
     showImportForm.value = true;
   }
 });
