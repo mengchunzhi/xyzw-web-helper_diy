@@ -14,6 +14,26 @@ CREATE TABLE IF NOT EXISTS tokens (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 创建 token_settings 表（每个账号的任务设置）
+CREATE TABLE IF NOT EXISTS token_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_id UUID NOT NULL REFERENCES tokens(id) ON DELETE CASCADE,
+  settings JSONB NOT NULL DEFAULT '{}',
+  template_id UUID,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(token_id)
+);
+
+-- 创建 task_templates 表（任务模板）
+CREATE TABLE IF NOT EXISTS task_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  settings JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 创建 tasks 表
 CREATE TABLE IF NOT EXISTS tasks (
   id UUID PRIMARY KEY,
@@ -55,3 +75,4 @@ CREATE INDEX IF NOT EXISTS idx_tasks_is_active ON tasks(is_active);
 CREATE INDEX IF NOT EXISTS idx_task_executions_task_id ON task_executions(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_executions_token_id ON task_executions(token_id);
 CREATE INDEX IF NOT EXISTS idx_task_executions_status ON task_executions(status);
+CREATE INDEX IF NOT EXISTS idx_token_settings_token_id ON token_settings(token_id);

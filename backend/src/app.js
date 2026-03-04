@@ -3,6 +3,8 @@ import cors from 'cors';
 import tokenRoutes from './api/tokens.js';
 import taskRoutes from './api/tasks.js';
 import testRoutes from './api/test.js';
+import tokenSettingsRoutes from './api/tokenSettings.js';
+import taskTemplatesRoutes from './api/taskTemplates.js';
 import { logger } from './utils/logger.js';
 
 const app = express();
@@ -41,6 +43,8 @@ app.get('/ping', (req, res) => {
 app.use('/api/tokens', tokenRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/test', testRoutes);
+app.use('/api/token-settings', tokenSettingsRoutes);
+app.use('/api/task-templates', taskTemplatesRoutes);
 
 // 404 处理
 app.use((req, res) => {

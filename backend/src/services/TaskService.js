@@ -244,13 +244,24 @@ class TaskService {
     try {
       this.unscheduleTask(id);
 
+      // 先删除相关的任务执行记录
+      const { error: deleteExecutionsError } = await supabase
+        .from('task_executions')
+        .delete()
+        .eq('task_id', id);
+
+      if (deleteExecutionsError) {
+        logger.error(`删除任务执行记录失败: ${JSON.stringify(deleteExecutionsError)}`);
+        // 继续尝试删除任务
+      }
+
       const { error } = await supabase
         .from('tasks')
         .delete()
         .eq('id', id);
 
       if (error) {
-        logger.error(`删除任务失败: ${error.message}`);
+        logger.error(`删除任务失败: ${JSON.stringify(error)}`);
         throw error;
       }
 
