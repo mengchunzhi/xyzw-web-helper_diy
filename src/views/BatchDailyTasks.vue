@@ -996,10 +996,10 @@
                   {{ template.name }}
                 </h4>
                 <div style="font-size: 12px; color: #86909c">
-                  创建时间: {{ new Date(template.createdAt).toLocaleString() }}
+                  创建时间: {{ formatDateTime(template.createdAt) }}
                   <span v-if="template.updatedAt"
                     >, 更新时间:
-                    {{ new Date(template.updatedAt).toLocaleString() }}</span
+                    {{ formatDateTime(template.updatedAt) }}</span
                   >
                 </div>
               </div>
@@ -2752,6 +2752,18 @@ const currentTemplate = reactive({
 
 // Account Template References
 const accountTemplateReferences = ref([]);
+
+// 格式化日期时间
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return '未知';
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '未知';
+    return date.toLocaleString();
+  } catch (e) {
+    return '未知';
+  }
+};
 const filteredAccountTemplates = ref([]);
 const selectedTemplateForFilter = ref(null);
 
@@ -4492,8 +4504,16 @@ const openTaskTemplateModal = async () => {
 const loadTaskTemplates = async () => {
   const result = await apiService.getTaskTemplates();
   const templates = result.success ? (result.data || []) : [];
-  taskTemplates.value = templates;
-  return templates;
+  // 转换字段名格式
+  taskTemplates.value = templates.map(t => ({
+    ...t,
+    id: t.id,
+    name: t.name,
+    settings: t.settings,
+    createdAt: t.created_at || t.createdAt,
+    updatedAt: t.updated_at || t.updatedAt
+  }));
+  return taskTemplates.value;
 };
 
 const openApplyTemplateModal = async () => {

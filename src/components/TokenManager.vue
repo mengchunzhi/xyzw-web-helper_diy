@@ -556,6 +556,15 @@ const importTokens = async ({ file }) => {
         let skippedTokens = 0;
         let skippedTasks = 0;
         
+        // 用于存储 ID 映射（旧ID -> 新ID）
+        const tokenIdMap = new Map();
+        
+        // 先从后端获取已有的 Token 列表
+        const existingTokensResult = await apiService.getTokens();
+        const existingTokens = existingTokensResult.success ? (existingTokensResult.data || []) : [];
+        const existingTokenIds = new Set(existingTokens.map(t => t.id));
+        const existingTokenStrings = new Set(existingTokens.map(t => t.token));
+        
         // 1. 导入 Token 列表 (兼容 gameTokens 和 tokens 字段)
         const tokensToImport = importData.tokens || importData.gameTokens;
         if (tokensToImport) {
@@ -586,17 +595,43 @@ const importTokens = async ({ file }) => {
                 continue;
               }
               
-              // 检查是否已存在
-              const existingToken = tokenStore.gameTokens.find(t => t.id === tokenInfo.id);
-              if (!existingToken) {
-                const result = await apiService.createToken(tokenInfo);
-                if (result.success) {
-                  importedTokens++;
-                } else {
-                  console.warn('创建Token失败:', result.error);
-                  skippedTokens++;
+              // 检查是否已存在（按 ID 或 token 字符串）
+              const existsById = existingTokenIds.has(tokenInfo.id);
+              const existsByToken = existingTokenStrings.has(tokenInfo.token);
+              
+              if (existsById) {
+                console.log('跳过已存在的Token（ID相同）:', tokenInfo.id);
+                // 记录 ID 映射
+                tokenIdMap.set(tokenInfo.id, tokenInfo.id);
+                skippedTokens++;
+                continue;
+              }
+              
+              if (existsByToken) {
+                // 找到已存在的 Token，记录 ID 映射
+                const existingToken = existingTokens.find(t => t.token === tokenInfo.token);
+                if (existingToken) {
+                  tokenIdMap.set(tokenInfo.id, existingToken.id);
+                  console.log('跳过已存在的Token（token相同）:', tokenInfo.name, '映射:', tokenInfo.id, '->', existingToken.id);
                 }
+                skippedTokens++;
+                continue;
+              }
+              
+              // 创建新 Token
+              const result = await apiService.createToken(tokenInfo);
+              if (result.success && result.data?.id) {
+                importedTokens++;
+                // 记录 ID 映射（旧ID -> 新ID）
+                if (tokenInfo.id !== result.data.id) {
+                  tokenIdMap.set(tokenInfo.id, result.data.id);
+                  console.log('Token ID 映射:', tokenInfo.id, '->', result.data.id);
+                }
+                // 添加到已存在列表，防止重复
+                existingTokenIds.add(result.data.id);
+                existingTokenStrings.add(tokenInfo.token);
               } else {
+                console.warn('创建Token失败:', result.error);
                 skippedTokens++;
               }
             } catch (tokenError) {
@@ -608,9 +643,19 @@ const importTokens = async ({ file }) => {
         
         // 2. 导入任务模板 (可选，旧版本可能没有)
         if (importData.taskTemplates && Array.isArray(importData.taskTemplates)) {
+          // 先获取现有模板列表
+          const existingTemplatesResult = await apiService.getTaskTemplates();
+          const existingTemplates = existingTemplatesResult.success ? (existingTemplatesResult.data || []) : [];
+          const existingTemplateNames = existingTemplates.map(t => t.name);
+          
           for (const template of importData.taskTemplates) {
             try {
               if (template.name && template.settings) {
+                // 检查是否已存在同名模板
+                if (existingTemplateNames.includes(template.name)) {
+                  console.log('跳过已存在的模板:', template.name);
+                  continue;
+                }
                 const result = await apiService.createTaskTemplate({
                   name: template.name,
                   settings: template.settings
@@ -629,10 +674,20 @@ const importTokens = async ({ file }) => {
         if (importData.tokenSettings && Array.isArray(importData.tokenSettings)) {
           for (const setting of importData.tokenSettings) {
             try {
-              const tokenId = setting.token_id || setting.tokenId;
+              let tokenId = setting.token_id || setting.tokenId;
               if (tokenId && setting.settings) {
+                // 使用 ID 映射获取新的 Token ID
+                const mappedTokenId = tokenIdMap.get(tokenId) || tokenId;
+                
+                // 验证 tokenId 是否是有效的 UUID 格式
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (!uuidRegex.test(mappedTokenId)) {
+                  console.warn('跳过无效的Token ID格式:', mappedTokenId);
+                  continue;
+                }
+                
                 const result = await apiService.saveTokenSettings(
-                  tokenId, 
+                  mappedTokenId, 
                   setting.settings, 
                   setting.template_id || setting.templateId
                 );
