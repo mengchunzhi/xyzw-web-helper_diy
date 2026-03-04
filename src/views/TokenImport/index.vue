@@ -878,7 +878,7 @@ const refreshToken = async (token) => {
       }
 
       // 更新token信息
-      tokenStore.updateToken(token.id, {
+      await tokenStore.updateToken(token.id, {
         token: data.token,
         server: data.server || token.server,
         lastRefreshed: Date.now(),
@@ -897,7 +897,7 @@ const refreshToken = async (token) => {
       }
       if (userToken) {
         const newToken = await transformToken(userToken);
-        tokenStore.updateToken(token.id, {
+        await tokenStore.updateToken(token.id, {
           token: newToken,
           lastRefreshed: Date.now(),
         });
@@ -1166,7 +1166,7 @@ const saveEdit = async () => {
   try {
     await editFormRef.value.validate();
 
-    tokenStore.updateToken(editingToken.value.id, {
+    await tokenStore.updateToken(editingToken.value.id, {
       name: editForm.name,
       token: editForm.token,
       server: editForm.server,
@@ -1198,12 +1198,12 @@ const startEditRemark = (token) => {
 };
 
 // 保存备注的通用函数
-const saveCurrentRemark = () => {
+const saveCurrentRemark = async () => {
   if (!editingRemark.value) return;
 
   const editingTokenId = editingRemark.value;
   const remark = tempRemarks.value[editingTokenId] || "";
-  tokenStore.updateToken(editingTokenId, {
+  await tokenStore.updateToken(editingTokenId, {
     remark: remark,
   });
   editingRemark.value = null;

@@ -231,7 +231,7 @@ export const useTokenStore = defineStore("tokens", () => {
     return newToken;
   };
 
-  const updateToken = (tokenId: string, updates: Partial<TokenData>) => {
+  const updateToken = async (tokenId: string, updates: Partial<TokenData>) => {
     const index = gameTokens.value.findIndex((token) => token.id === tokenId);
     if (index !== -1) {
       gameTokens.value[index] = {
@@ -239,6 +239,25 @@ export const useTokenStore = defineStore("tokens", () => {
         ...updates,
         updatedAt: new Date().toISOString(),
       };
+      
+      // 同步到后端
+      try {
+        const config = (await import('@/config')).default;
+        if (config.api.useBackend) {
+          const apiService = (await import('@/services/apiService')).default;
+          await apiService.updateToken(tokenId, {
+            name: updates.name,
+            token: updates.token,
+            ws_url: updates.wsUrl,
+            server: updates.server,
+            remark: updates.remark,
+            avatar: updates.avatar,
+          });
+        }
+      } catch (error) {
+        tokenLogger.error('更新Token到后端失败:', error);
+      }
+      
       return true;
     }
     return false;
@@ -1187,6 +1206,20 @@ export const useTokenStore = defineStore("tokens", () => {
     Object.keys(wsConnections.value).forEach((tokenId) => {
       closeWebSocketConnection(tokenId);
     });
+
+    // 同步到后端
+    try {
+      const config = (await import('@/config')).default;
+      if (config.api.useBackend) {
+        const apiService = (await import('@/services/apiService')).default;
+        // 逐个删除 token
+        for (const token of gameTokens.value) {
+          await apiService.deleteToken(token.id);
+        }
+      }
+    } catch (error) {
+      tokenLogger.error('从后端删除Token失败:', error);
+    }
 
     gameTokens.value = [];
     selectedTokenId.value = null;
