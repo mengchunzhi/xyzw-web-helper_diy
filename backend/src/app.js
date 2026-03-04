@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import tokenRoutes from './api/tokens.js';
 import taskRoutes from './api/tasks.js';
+import testRoutes from './api/test.js';
 import { logger } from './utils/logger.js';
 
 const app = express();
@@ -25,6 +26,7 @@ app.get('/health', (req, res) => {
 // API 路由
 app.use('/api/tokens', tokenRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/test', testRoutes);
 
 // 404 处理
 app.use((req, res) => {
