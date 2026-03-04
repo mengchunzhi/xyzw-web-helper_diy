@@ -237,6 +237,30 @@ export const useTokenStore = defineStore("tokens", () => {
   };
 
   const removeToken = async (tokenId: string) => {
+    // 检查是否使用后端API
+    let useBackend = false;
+    try {
+      const config = await import('@/config');
+      useBackend = config.default.api.useBackend;
+    } catch (error) {
+      // 导入失败，使用默认值
+    }
+
+    // 如果使用后端API，调用后端删除接口
+    if (useBackend) {
+      try {
+        const apiService = await import('@/services/apiService');
+        const result = await apiService.default.deleteToken(tokenId);
+        if (!result.success) {
+          throw new Error(result.error || '删除失败');
+        }
+      } catch (error) {
+        console.error('删除Token失败:', error);
+        return false;
+      }
+    }
+
+    // 删除本地token
     gameTokens.value = gameTokens.value.filter((token) => token.id !== tokenId);
 
     // 关闭对应的WebSocket连接

@@ -2290,6 +2290,7 @@ import { DailyTaskRunner } from "@/utils/dailyTaskRunner";
 import { preloadQuestions } from "@/utils/studyQuestionsFromJSON.js";
 import { useMessage } from "naive-ui";
 import { Settings } from "@vicons/ionicons5";
+import apiService from "@/services/apiService";
 
 // Import batch task modules
 import {
@@ -2964,18 +2965,33 @@ const manualExecuteTask = async (task) => {
   }
 };
 
-// Load scheduled tasks from localStorage
-const loadScheduledTasks = () => {
+// Load scheduled tasks
+const loadScheduledTasks = async () => {
   try {
-    const saved = localStorage.getItem("scheduledTasks");
-
-    if (saved) {
-      const parsed = JSON.parse(saved);
-
-      // Ensure we have an array
-      scheduledTasks.value = Array.isArray(parsed) ? parsed : [];
+    // 检查是否使用后端API
+    const useBackend = await apiService.shouldUseBackend();
+    
+    if (useBackend) {
+      // 从后端API加载任务
+      const result = await apiService.getTasks();
+      if (result.success) {
+        scheduledTasks.value = result.data || [];
+        console.log('Tasks loaded from backend');
+      } else {
+        console.error('Failed to load tasks from backend:', result.error);
+        scheduledTasks.value = [];
+      }
     } else {
-      scheduledTasks.value = [];
+      // 从localStorage加载
+      const saved = localStorage.getItem("scheduledTasks");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Ensure we have an array
+        scheduledTasks.value = Array.isArray(parsed) ? parsed : [];
+      } else {
+        scheduledTasks.value = [];
+      }
+      console.log('Tasks loaded from localStorage');
     }
   } catch (error) {
     console.error("Failed to load scheduled tasks:", error);
@@ -2983,14 +2999,32 @@ const loadScheduledTasks = () => {
   }
 };
 
-// Save scheduled tasks to localStorage
-const saveScheduledTasks = () => {
+// Save scheduled tasks
+const saveScheduledTasks = async () => {
   try {
-    const dataToSave = JSON.stringify(scheduledTasks.value);
-
-    localStorage.setItem("scheduledTasks", dataToSave);
-    // Verify save was successful
-    const saved = localStorage.getItem("scheduledTasks");
+    // 检查是否使用后端API
+    const useBackend = await apiService.shouldUseBackend();
+    
+    if (useBackend) {
+      // 使用后端API保存任务
+      for (const task of scheduledTasks.value) {
+        if (task.id.startsWith('task_')) {
+          // 新任务，创建
+          await apiService.createTask(task);
+        } else {
+          // 现有任务，更新
+          await apiService.updateTask(task.id, task);
+        }
+      }
+      console.log('Tasks saved to backend');
+    } else {
+      // 保存到localStorage
+      const dataToSave = JSON.stringify(scheduledTasks.value);
+      localStorage.setItem("scheduledTasks", dataToSave);
+      // Verify save was successful
+      const saved = localStorage.getItem("scheduledTasks");
+      console.log('Tasks saved to localStorage');
+    }
   } catch (error) {
     console.error("Failed to save scheduled tasks:", error);
   }
@@ -3069,7 +3103,7 @@ const parseCronExpression = (expression) => {
 // 注: calculateNextRuns 已从 @/utils/batch 导入
 
 // Save task (create or update)
-const saveTask = () => {
+const saveTask = async () => {
   if (!taskForm.name) {
     message.warning("请输入任务名称");
     return;
@@ -3141,7 +3175,7 @@ const saveTask = () => {
     scheduledTasks.value.push(taskData);
   }
 
-  saveScheduledTasks();
+  await saveScheduledTasks();
 
   // Add log entry for task save
   addTaskSaveLog(taskData, isNew, addLog);
@@ -3151,11 +3185,25 @@ const saveTask = () => {
 };
 
 // Delete task
-const deleteTask = (taskId) => {
+const deleteTask = async (taskId) => {
   const task = scheduledTasks.value.find((t) => t.id === taskId);
   if (task) {
+    // 检查是否使用后端API
+    const useBackend = await apiService.shouldUseBackend();
+    
+    if (useBackend) {
+      // 使用后端API删除任务
+      const result = await apiService.deleteTask(taskId);
+      if (!result.success) {
+        console.error('Failed to delete task from backend:', result.error);
+        message.error('删除任务失败');
+        return;
+      }
+    }
+    
+    // 从本地列表中删除
     scheduledTasks.value = scheduledTasks.value.filter((t) => t.id !== taskId);
-    saveScheduledTasks();
+    await saveScheduledTasks();
     addLog({
       time: new Date().toLocaleTimeString(),
       message: `=== 定时任务 ${task.name} 已删除 ===`,
@@ -3166,11 +3214,11 @@ const deleteTask = (taskId) => {
 };
 
 // Toggle task enabled state
-const toggleTaskEnabled = (taskId, enabled) => {
+const toggleTaskEnabled = async (taskId, enabled) => {
   const task = scheduledTasks.value.find((t) => t.id === taskId);
   if (task) {
     task.enabled = enabled;
-    saveScheduledTasks();
+    await saveScheduledTasks();
     message.success(`定时任务已${enabled ? "启用" : "禁用"}`);
     addLog({
       time: new Date().toLocaleTimeString(),
@@ -3482,8 +3530,10 @@ const startCountdown = () => {
 // Scheduled Tasks Scheduler
 // ======================
 
-// Initialize scheduled tasks from localStorage
-loadScheduledTasks();
+// Initialize scheduled tasks
+(async () => {
+  await loadScheduledTasks();
+})();
 
 // Watch for changes to scheduledTasks for debugging
 watch(

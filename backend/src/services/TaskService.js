@@ -109,16 +109,20 @@ class TaskService {
    */
   async createTask(taskData) {
     try {
+      // 处理前端创建的任务数据结构
       const task = {
-        id: uuidv4(),
+        id: taskData.id || uuidv4(),
         name: taskData.name,
-        type: taskData.type,
-        token_ids: taskData.token_ids || [],
-        run_type: taskData.run_type || 'daily',
-        run_time: taskData.run_time || '00:00',
-        cron_expression: taskData.cron_expression || '0 0 * * *',
-        settings: taskData.settings || {},
-        is_active: taskData.is_active !== false,
+        type: 'daily', // 默认类型
+        token_ids: taskData.selectedTokens || taskData.token_ids || [],
+        run_type: taskData.runType || taskData.run_type || 'daily',
+        run_time: taskData.runTime || taskData.run_time || '00:00',
+        cron_expression: taskData.cronExpression || taskData.cron_expression || '0 0 * * *',
+        settings: {
+          selectedTasks: taskData.selectedTasks || [],
+          ...(taskData.settings || {})
+        },
+        is_active: taskData.enabled !== false && taskData.is_active !== false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -310,22 +314,33 @@ class TaskService {
     const steps = [];
 
     try {
-      // 根据任务类型执行不同的步骤
-      switch (task.type) {
-        case 'daily':
-          await this.executeDailyTask(steps, token, wsClient);
-          break;
-        case 'tower':
-          await this.executeTowerTask(steps, token, wsClient, task.settings);
-          break;
-        case 'arena':
-          await this.executeArenaTask(steps, token, wsClient, task.settings);
-          break;
-        case 'legion':
-          await this.executeLegionTask(steps, token, wsClient, task.settings);
-          break;
-        default:
-          throw new Error(`未知任务类型: ${task.type}`);
+      // 执行前端选择的具体任务
+      const selectedTasks = task.settings.selectedTasks || [];
+      
+      if (selectedTasks.length > 0) {
+        for (const taskName of selectedTasks) {
+          steps.push({ name: `执行任务: ${taskName}`, status: 'running' });
+          await this.executeSpecificTask(taskName, steps, token, wsClient);
+          steps[steps.length - 1].status = 'success';
+        }
+      } else {
+        // 根据任务类型执行不同的步骤
+        switch (task.type) {
+          case 'daily':
+            await this.executeDailyTask(steps, token, wsClient);
+            break;
+          case 'tower':
+            await this.executeTowerTask(steps, token, wsClient, task.settings);
+            break;
+          case 'arena':
+            await this.executeArenaTask(steps, token, wsClient, task.settings);
+            break;
+          case 'legion':
+            await this.executeLegionTask(steps, token, wsClient, task.settings);
+            break;
+          default:
+            throw new Error(`未知任务类型: ${task.type}`);
+        }
       }
 
       return {
@@ -339,6 +354,37 @@ class TaskService {
         error: error.message
       });
       throw error;
+    }
+  }
+
+  /**
+   * 执行具体的任务
+   */
+  async executeSpecificTask(taskName, steps, token, wsClient) {
+    switch (taskName) {
+      case 'signin':
+        await wsClient.sendWithPromise('system_signinreward');
+        break;
+      case 'hangup':
+        await wsClient.sendWithPromise('system_claimhangupreward');
+        break;
+      case 'daily':
+        await wsClient.sendWithPromise('task_claimdailyreward', { rewardId: 0 });
+        break;
+      case 'legionSignin':
+        await wsClient.sendWithPromise('legion_signin');
+        break;
+      case 'tower':
+        await this.executeTowerTask(steps, token, wsClient, {});
+        break;
+      case 'arena':
+        await this.executeArenaTask(steps, token, wsClient, {});
+        break;
+      case 'legion':
+        await this.executeLegionTask(steps, token, wsClient, {});
+        break;
+      default:
+        logger.warn(`未知任务: ${taskName}`);
     }
   }
 

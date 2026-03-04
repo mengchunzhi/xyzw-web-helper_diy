@@ -32,54 +32,43 @@
       <!-- 用户Token -->
       <div class="token-section">
         <h4>用户认证Token</h4>
-        <div v-if="localTokenStore.userToken" class="token-item">
-          <div class="token-info">
-            <span class="token-label">Token:</span>
-            <span class="token-value">{{
-              maskToken(localTokenStore.userToken)
-            }}</span>
-          </div>
-          <n-button size="tiny" type="error" @click="clearUserToken">
-            清除
-          </n-button>
-        </div>
-        <div v-else class="empty-token">
-          <span>未设置用户Token</span>
+        <div class="empty-token">
+          <span>用户Token管理已移至Token导入页面</span>
         </div>
       </div>
       <!-- 游戏Token列表 -->
       <div class="token-section">
         <h4>
-          游戏角色Token ({{ Object.keys(localTokenStore.gameTokens).length }}个)
+          游戏角色Token ({{ tokenStore.gameTokens.length }}个)
         </h4>
         <div class="game-tokens-list">
           <div
-            v-for="(tokenData, roleId) in localTokenStore.gameTokens"
-            :key="roleId"
+            v-for="token in tokenStore.gameTokens"
+            :key="token.id"
             class="game-token-item"
           >
             <div class="token-header">
               <div class="role-info">
-                <span class="role-name">{{ tokenData.roleName }}</span>
-                <span class="role-server">{{ tokenData.server }}</span>
+                <span class="role-name">{{ token.name }}</span>
+                <span class="role-server">{{ token.server }}</span>
               </div>
               <div class="token-actions">
                 <n-button
                   size="tiny"
                   :type="
-                    getWSStatus(roleId) === 'connected' ? 'success' : 'default'
+                    getWSStatus(token.id) === 'connected' ? 'success' : 'default'
                   "
-                  @click="toggleWebSocket(roleId, tokenData)"
+                  @click="toggleWebSocket(token.id, token)"
                 >
-                  {{
-                    getWSStatus(roleId) === "connected" ? "断开WS" : "连接WS"
+                  {{ 
+                    getWSStatus(token.id) === "connected" ? "断开WS" : "连接WS"
                   }}
                 </n-button>
 
                 <n-dropdown
-                  :options="getTokenMenuOptions(tokenData)"
+                  :options="getTokenMenuOptions(token)"
                   trigger="click"
-                  @select="handleTokenAction($event, roleId, tokenData)"
+                  @select="handleTokenAction($event, token.id, token)"
                 >
                   <n-button size="tiny" type="tertiary">
                     <template #icon>
@@ -96,32 +85,32 @@
               <div class="detail-item">
                 <span class="detail-label">Token:</span>
                 <span class="detail-value">{{
-                  maskToken(tokenData.token)
+                  maskToken(token.token)
                 }}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">WebSocket URL:</span>
-                <span class="detail-value">{{ tokenData.wsUrl }}</span>
+                <span class="detail-value">{{ token.wsUrl }}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">创建时间:</span>
                 <span class="detail-value">{{
-                  formatTime(tokenData.createdAt)
+                  formatTime(token.createdAt)
                 }}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">最后使用:</span>
                 <span class="detail-value">{{
-                  formatTime(tokenData.lastUsed)
+                  formatTime(token.lastUsed || token.createdAt)
                 }}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">连接状态:</span>
                 <n-tag
                   size="small"
-                  :type="getWSStatusType(getWSStatus(roleId))"
+                  :type="getWSStatusType(getWSStatus(token.id))"
                 >
-                  {{ getWSStatusText(getWSStatus(roleId)) }}
+                  {{ getWSStatusText(getWSStatus(token.id)) }}
                 </n-tag>
               </div>
             </div>
@@ -142,8 +131,7 @@
 <script setup>
 import { ref, h } from "vue";
 import { useMessage, useDialog, NIcon } from "naive-ui";
-import { gameTokens } from "@/stores/tokenStore";
-import { useLocalTokenStore } from "@/stores/localTokenManager";
+import { useTokenStore } from "@/stores/tokenStore";
 import { useGameRolesStore } from "@/stores/gameRoles";
 import {
   Refresh,
@@ -158,7 +146,7 @@ import {
 
 const message = useMessage();
 const dialog = useDialog();
-const localTokenStore = useLocalTokenStore();
+const tokenStore = useTokenStore();
 const gameRolesStore = useGameRolesStore();
 
 // 方法
@@ -174,7 +162,7 @@ const formatTime = (timestamp) => {
 };
 
 const getWSStatus = (roleId) => {
-  return localTokenStore.getWebSocketStatus(roleId);
+  return tokenStore.getWebSocketStatus(roleId);
 };
 
 const getWSStatusType = (status) => {
@@ -268,32 +256,21 @@ const handleTokenAction = (action, roleId, tokenData) => {
 };
 
 const refreshTokens = () => {
-  localTokenStore.initTokenManager();
+  tokenStore.initTokenStore();
   message.success("Token数据已刷新");
 };
 
-const clearUserToken = () => {
-  dialog.warning({
-    title: "清除用户Token",
-    content: "确定要清除用户认证Token吗？这将会退出登录。",
-    positiveText: "确定",
-    negativeText: "取消",
-    onPositiveClick: () => {
-      localTokenStore.clearUserToken();
-      message.success("用户Token已清除");
-    },
-  });
-};
+// 用户Token管理已移至Token导入页面
 
 const toggleWebSocket = (roleId, tokenData) => {
   const status = getWSStatus(roleId);
 
   if (status === "connected") {
-    localTokenStore.closeWebSocketConnection(roleId);
+    tokenStore.closeWebSocketConnection(roleId);
     message.info("WebSocket连接已断开");
   } else {
     try {
-      localTokenStore.createWebSocketConnection(
+      tokenStore.createWebSocketConnection(
         roleId,
         tokenData.token,
         tokenData.wsUrl,
@@ -306,7 +283,7 @@ const toggleWebSocket = (roleId, tokenData) => {
 };
 
 const regenerateToken = (roleId) => {
-  const oldTokenData = localTokenStore.getGameToken(roleId);
+  const oldTokenData = tokenStore.gameTokens.find(token => token.id === roleId);
   if (!oldTokenData) {
     message.error("找不到对应的Token数据");
     return;
@@ -374,7 +351,7 @@ const regenerateToken = (roleId) => {
         }
 
         // 更新token
-        localTokenStore.updateGameToken(roleId, {
+        await tokenStore.updateToken(roleId, {
           token: data.token,
           server: data.server || oldTokenData.server,
           regeneratedAt: new Date().toISOString(),
@@ -382,10 +359,10 @@ const regenerateToken = (roleId) => {
         });
 
         // 如果当前token有连接，需要重新连接
-        if (localTokenStore.getWebSocketStatus(roleId) === "connected") {
-          localTokenStore.closeWebSocketConnection(roleId);
+        if (tokenStore.getWebSocketStatus(roleId) === "connected") {
+          tokenStore.closeWebSocketConnection(roleId);
           setTimeout(() => {
-            localTokenStore.createWebSocketConnection(
+            tokenStore.createWebSocketConnection(
               roleId,
               data.token,
               oldTokenData.wsUrl,
@@ -403,15 +380,19 @@ const regenerateToken = (roleId) => {
   });
 };
 
-const removeToken = (roleId) => {
+const removeToken = async (roleId) => {
   dialog.warning({
     title: "删除Token",
     content: "确定要删除此角色的游戏Token吗？这将断开相关的WebSocket连接。",
     positiveText: "确定删除",
     negativeText: "取消",
-    onPositiveClick: () => {
-      localTokenStore.removeGameToken(roleId);
-      message.success("Token已删除");
+    onPositiveClick: async () => {
+      const success = await tokenStore.removeToken(roleId);
+      if (success) {
+        message.success("Token已删除");
+      } else {
+        message.error("删除Token失败");
+      }
     },
   });
 };
