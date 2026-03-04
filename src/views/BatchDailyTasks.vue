@@ -3353,7 +3353,7 @@ const deselectAllTasks = () => {
 // ======================
 
 // Export all tokens and scheduled tasks configuration
-const exportConfig = () => {
+const exportConfig = async () => {
   try {
     // Get all valid token IDs
     const validTokenIds = new Set(tokens.value.map((t) => t.id));
@@ -3364,24 +3364,25 @@ const exportConfig = () => {
       selectedTokens: task.selectedTokens?.filter((tokenId) => validTokenIds.has(tokenId)) || [],
     })).filter((task) => task.selectedTokens.length > 0); // Remove tasks with no valid tokens
 
-    // Gather token settings
+    // Gather token settings from backend
     const tokenSettings = [];
-    tokens.value.forEach((token) => {
-      const settings = localStorage.getItem(`daily-settings:${token.id}`);
-      if (settings) {
-        try {
-          tokenSettings.push({
-            tokenId: token.id,
-            settings: JSON.parse(settings),
-          });
-        } catch (e) {
-          console.warn(`Failed to parse settings for token ${token.id}`, e);
-        }
-      }
-    });
+    const allSettingsResult = await apiService.getAllTokenSettings();
+    if (allSettingsResult.success && allSettingsResult.data) {
+      allSettingsResult.data.forEach((item) => {
+        tokenSettings.push({
+          tokenId: item.token_id,
+          settings: item.settings,
+          templateId: item.template_id,
+        });
+      });
+    }
+
+    // 同时获取任务模板
+    const templatesResult = await apiService.getTaskTemplates();
+    const taskTemplatesList = templatesResult.success ? (templatesResult.data || []) : [];
 
     const exportData = {
-      version: "1.1",
+      version: "1.2",
       exportTime: new Date().toISOString(),
       tokens: tokens.value.map((t) => ({
         id: t.id,
@@ -3420,6 +3421,7 @@ const exportConfig = () => {
         smartDepartureMatchAll: batchSettings.smartDepartureMatchAll,
       },
       tokenSettings: tokenSettings,
+      taskTemplates: taskTemplatesList,
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], {
@@ -3510,12 +3512,21 @@ const importConfig = async ({ file }) => {
 
         // Import token settings
         if (Array.isArray(importData.tokenSettings)) {
-          importData.tokenSettings.forEach((item) => {
+          importData.tokenSettings.forEach(async (item) => {
             if (item.tokenId && item.settings) {
-              localStorage.setItem(
-                `daily-settings:${item.tokenId}`,
-                JSON.stringify(item.settings)
-              );
+              await apiService.saveTokenSettings(item.tokenId, item.settings, item.templateId);
+            }
+          });
+        }
+
+        // Import task templates
+        if (Array.isArray(importData.taskTemplates)) {
+          importData.taskTemplates.forEach(async (template) => {
+            if (template.name && template.settings) {
+              await apiService.createTaskTemplate({
+                name: template.name,
+                settings: template.settings
+              });
             }
           });
         }
@@ -4405,9 +4416,8 @@ const clearAllItems = () => {
 
 // 注: formationOptions, bossTimesOptions 已从 @/utils/batch 导入
 
-const loadSettings = (tokenId) => {
+const loadSettings = async (tokenId) => {
   try {
-    const raw = localStorage.getItem(`daily-settings:${tokenId}`);
     const defaultSettings = {
       arenaFormation: 1,
       towerFormation: 1,
@@ -4421,36 +4431,46 @@ const loadSettings = (tokenId) => {
       claimEmail: true,
       blackMarketPurchase: true,
     };
-    return raw ? { ...defaultSettings, ...JSON.parse(raw) } : defaultSettings;
+    
+    const result = await apiService.getTokenSettings(tokenId);
+    if (result.success && result.data) {
+      const settings = result.data.settings || result.data;
+      return { ...defaultSettings, ...settings };
+    }
+    return defaultSettings;
   } catch (error) {
     console.error("Failed to load settings:", error);
     return null;
   }
 };
 
-const openSettings = (token) => {
+const openSettings = async (token) => {
   currentSettingsTokenId.value = token.id;
   currentSettingsTokenName.value = token.name;
-  const saved = loadSettings(token.id);
+  const saved = await loadSettings(token.id);
   Object.assign(currentSettings, saved);
   showSettingsModal.value = true;
 };
 
-const saveSettings = () => {
+const saveSettings = async () => {
   if (currentSettingsTokenId.value) {
-    localStorage.setItem(
-      `daily-settings:${currentSettingsTokenId.value}`,
-      JSON.stringify(currentSettings),
+    const result = await apiService.saveTokenSettings(
+      currentSettingsTokenId.value, 
+      currentSettings
     );
-    message.success(`已保存 ${currentSettingsTokenName.value} 的设置`);
-    showSettingsModal.value = false;
+    if (result.success) {
+      message.success(`已保存 ${currentSettingsTokenName.value} 的设置`);
+      showSettingsModal.value = false;
+    } else {
+      message.error(`保存失败: ${result.error}`);
+    }
   }
 };
 
 // Task Template Functions
-const openTaskTemplateModal = () => {
+const openTaskTemplateModal = async () => {
   // 加载模板列表
-  loadTaskTemplates();
+  await loadTaskTemplates();
   // 重置当前模板
   Object.assign(currentTemplate, {
     arenaFormation: 1,
@@ -4469,16 +4489,16 @@ const openTaskTemplateModal = () => {
   showTaskTemplateModal.value = true;
 };
 
-const loadTaskTemplates = () => {
-  const templates = localStorage.getItem("task-templates");
-  const parsed = templates ? JSON.parse(templates) : [];
-  taskTemplates.value = parsed;
-  return parsed;
+const loadTaskTemplates = async () => {
+  const result = await apiService.getTaskTemplates();
+  const templates = result.success ? (result.data || []) : [];
+  taskTemplates.value = templates;
+  return templates;
 };
 
-const openApplyTemplateModal = () => {
+const openApplyTemplateModal = async () => {
   // 加载模板列表
-  loadTaskTemplates();
+  await loadTaskTemplates();
   // 重置选择
   selectedTemplateId.value = null;
   selectedTokensForApply.value = [];
@@ -4493,14 +4513,14 @@ const handleSelectAllForApply = (checked) => {
   }
 };
 
-const applyTemplate = () => {
+const applyTemplate = async () => {
   if (!selectedTemplateId.value || selectedTokensForApply.value.length === 0) {
     message.error("请选择模板和要应用的账号");
     return;
   }
 
   // 找到选中的模板
-  const templates = loadTaskTemplates();
+  const templates = await loadTaskTemplates();
   const template = templates.find((t) => t.id === selectedTemplateId.value);
   if (!template) {
     message.error("模板不存在");
@@ -4509,27 +4529,25 @@ const applyTemplate = () => {
 
   // 应用模板到选中的账号
   let successCount = 0;
-  selectedTokensForApply.value.forEach((tokenId) => {
-    // 保存账号设置时同时保存模板ID
+  for (const tokenId of selectedTokensForApply.value) {
     const accountSettings = {
       ...template.settings,
-      templateId: template.id, // 记录模板ID
+      templateId: template.id,
     };
-    localStorage.setItem(
-      `daily-settings:${tokenId}`,
-      JSON.stringify(accountSettings),
-    );
-    successCount++;
-  });
+    const result = await apiService.saveTokenSettings(tokenId, accountSettings, template.id);
+    if (result.success) {
+      successCount++;
+    }
+  }
 
   message.success(`已成功应用模板到 ${successCount} 个账号`);
   showApplyTemplateModal.value = false;
 };
 
 // Template Manager Functions
-const openTemplateManagerModal = () => {
+const openTemplateManagerModal = async () => {
   // 加载模板列表
-  loadTaskTemplates();
+  await loadTaskTemplates();
   showTemplateManagerModal.value = true;
 };
 
@@ -4541,59 +4559,37 @@ const openEditTemplateModal = (template) => {
   showTaskTemplateModal.value = true;
 };
 
-const updateTaskTemplate = () => {
+const updateTaskTemplate = async () => {
   if (!currentTemplateName.value.trim()) {
     message.error("请输入模板名称");
     return;
   }
 
-  // 找到并更新模板
-  const templates = loadTaskTemplates();
-  const templateIndex = templates.findIndex(
-    (t) => t.id === currentTemplateId.value,
-  );
-  if (templateIndex === -1) {
-    message.error("模板不存在");
-    return;
-  }
-
-  // 更新模板
-  templates[templateIndex] = {
-    ...templates[templateIndex],
+  const result = await apiService.updateTaskTemplate(currentTemplateId.value, {
     name: currentTemplateName.value.trim(),
-    settings: {
-      ...currentTemplate,
-    },
-    updatedAt: new Date().toISOString(),
-  };
+    settings: { ...currentTemplate }
+  });
 
-  // 保存模板到localStorage
-  localStorage.setItem("task-templates", JSON.stringify(templates));
-
-  // 更新模板列表
-  taskTemplates.value = templates;
-
-  message.success(`已更新模板 "${templates[templateIndex].name}"`);
-  showTaskTemplateModal.value = false;
-
-  // 重置编辑状态
-  resetTemplateForm();
+  if (result.success) {
+    message.success(`已更新模板 "${currentTemplateName.value.trim()}"`);
+    showTaskTemplateModal.value = false;
+    await loadTaskTemplates();
+    resetTemplateForm();
+  } else {
+    message.error(`更新失败: ${result.error}`);
+  }
 };
 
-const deleteTaskTemplate = (templateId) => {
+const deleteTaskTemplate = async (templateId) => {
   // 确认删除
   if (confirm("确定要删除这个模板吗？")) {
-    // 找到并删除模板
-    const templates = loadTaskTemplates();
-    const filteredTemplates = templates.filter((t) => t.id !== templateId);
-
-    // 保存模板到localStorage
-    localStorage.setItem("task-templates", JSON.stringify(filteredTemplates));
-
-    // 更新模板列表
-    taskTemplates.value = filteredTemplates;
-
-    message.success("模板已删除");
+    const result = await apiService.deleteTaskTemplate(templateId);
+    if (result.success) {
+      message.success("模板已删除");
+      await loadTaskTemplates();
+    } else {
+      message.error(`删除失败: ${result.error}`);
+    }
   }
 };
 
@@ -4675,40 +4671,30 @@ const openNewTemplateModal = () => {
 };
 
 // 修改saveTaskTemplate函数，支持新增和编辑
-const saveTaskTemplate = () => {
+const saveTaskTemplate = async () => {
   if (!currentTemplateName.value.trim()) {
     message.error("请输入模板名称");
     return;
   }
 
-  const templates = loadTaskTemplates();
-
   if (currentTemplateId.value) {
     // 更新现有模板
-    updateTaskTemplate();
+    await updateTaskTemplate();
   } else {
     // 创建新模板
-    const template = {
-      id: Date.now().toString(),
+    const result = await apiService.createTaskTemplate({
       name: currentTemplateName.value.trim(),
-      settings: {
-        ...currentTemplate,
-      },
-      createdAt: new Date().toISOString(),
-    };
+      settings: { ...currentTemplate }
+    });
 
-    // 添加新模板
-    templates.push(template);
-    localStorage.setItem("task-templates", JSON.stringify(templates));
-
-    // 更新模板列表
-    taskTemplates.value = templates;
-
-    message.success(`已保存模板 "${template.name}"`);
-    showTaskTemplateModal.value = false;
-
-    // 重置表单
-    resetTemplateForm();
+    if (result.success) {
+      message.success(`已保存模板 "${currentTemplateName.value.trim()}"`);
+      showTaskTemplateModal.value = false;
+      await loadTaskTemplates();
+      resetTemplateForm();
+    } else {
+      message.error(`保存失败: ${result.error}`);
+    }
   }
 };
 
