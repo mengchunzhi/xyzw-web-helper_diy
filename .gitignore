@@ -79,3 +79,7 @@ dist.zip
 *.bin
 bin/
 server/config.json
+
+.env
+node_modules/
+dist/
