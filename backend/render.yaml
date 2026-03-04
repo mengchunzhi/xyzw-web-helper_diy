@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: xyzw-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+    regions:
+      - oregon
+    plan:
+      free
