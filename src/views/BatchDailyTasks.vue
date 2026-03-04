@@ -2892,6 +2892,22 @@ const scheduledTasks = ref([]); // List of all scheduled tasks
 const showTaskModal = ref(false); // Control the visibility of the add/edit task modal
 const showTasksModal = ref(false); // Control the visibility of the tasks list modal
 const editingTask = ref(null); // Currently editing task
+
+// 生成 UUID 格式的 ID（兼容 Supabase UUID 类型）
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+// 检查是否为有效的 UUID 格式
+const isValidUUID = (str) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
 const taskForm = reactive({
   name: "", // Task name
   runType: "daily", // 'daily' or 'cron'
@@ -2975,8 +2991,18 @@ const loadScheduledTasks = async () => {
       // 从后端API加载任务
       const result = await apiService.getTasks();
       if (result.success) {
-        scheduledTasks.value = result.data || [];
-        console.log('Tasks loaded from backend');
+        // 标记从后端加载的任务为已同步，并转换字段名
+        scheduledTasks.value = (result.data || []).map(task => ({
+          ...task,
+          runType: task.run_type || task.runType || 'daily',
+          runTime: task.run_time || task.runTime,
+          cronExpression: task.cron_expression || task.cronExpression,
+          selectedTokens: task.token_ids || task.selectedTokens || [],
+          selectedTasks: task.settings?.selectedTasks || task.selectedTasks || [],
+          enabled: task.is_active !== false,
+          _synced: true // 标记为已同步
+        }));
+        console.log('Tasks loaded from backend:', scheduledTasks.value.length);
       } else {
         console.error('Failed to load tasks from backend:', result.error);
         scheduledTasks.value = [];
@@ -3000,20 +3026,47 @@ const loadScheduledTasks = async () => {
 };
 
 // Save scheduled tasks
-const saveScheduledTasks = async () => {
+const saveScheduledTasks = async (newTaskId = null) => {
   try {
     // 检查是否使用后端API
     const useBackend = await apiService.shouldUseBackend();
     
     if (useBackend) {
-      // 使用后端API保存任务
-      for (const task of scheduledTasks.value) {
-        if (task.id.startsWith('task_')) {
-          // 新任务，创建
-          await apiService.createTask(task);
-        } else {
-          // 现有任务，更新
-          await apiService.updateTask(task.id, task);
+      // 如果指定了新任务ID，只保存该新任务（创建操作）
+      if (newTaskId) {
+        const task = scheduledTasks.value.find(t => t.id === newTaskId);
+        if (task) {
+          const result = await apiService.createTask(task);
+          if (result.success && result.data?.id) {
+            // 更新本地任务的ID为后端返回的ID
+            const index = scheduledTasks.value.findIndex(t => t.id === newTaskId);
+            if (index !== -1) {
+              scheduledTasks.value[index].id = result.data.id;
+              scheduledTasks.value[index]._synced = true; // 标记已同步
+            }
+            console.log('Task created successfully:', result.data.id);
+          } else {
+            console.error('Failed to create task:', result.error);
+            throw new Error(result.error || '创建任务失败');
+          }
+        }
+      } else {
+        // 同步所有任务：检查哪些需要创建，哪些需要更新
+        for (const task of scheduledTasks.value) {
+          if (!task._synced) {
+            // 未同步的任务，尝试创建
+            const result = await apiService.createTask(task);
+            if (result.success && result.data?.id) {
+              const index = scheduledTasks.value.findIndex(t => t.id === task.id);
+              if (index !== -1) {
+                scheduledTasks.value[index].id = result.data.id;
+                scheduledTasks.value[index]._synced = true;
+              }
+            }
+          } else {
+            // 已同步的任务，更新
+            await apiService.updateTask(task.id, task);
+          }
         }
       }
       console.log('Tasks saved to backend');
@@ -3021,12 +3074,11 @@ const saveScheduledTasks = async () => {
       // 保存到localStorage
       const dataToSave = JSON.stringify(scheduledTasks.value);
       localStorage.setItem("scheduledTasks", dataToSave);
-      // Verify save was successful
-      const saved = localStorage.getItem("scheduledTasks");
       console.log('Tasks saved to localStorage');
     }
   } catch (error) {
     console.error("Failed to save scheduled tasks:", error);
+    throw error;
   }
 };
 
@@ -3150,7 +3202,7 @@ const saveTask = async () => {
   }
 
   const taskData = {
-    id: editingTask.value?.id || "task_" + Date.now(),
+    id: editingTask.value?.id || generateUUID(),
     name: taskForm.name,
     runType: taskForm.runType,
     runTime: formattedRunTime,
@@ -3175,7 +3227,17 @@ const saveTask = async () => {
     scheduledTasks.value.push(taskData);
   }
 
-  await saveScheduledTasks();
+  try {
+    // 如果是新任务，传入ID进行创建；否则更新现有任务
+    await saveScheduledTasks(isNew ? taskData.id : null);
+  } catch (error) {
+    // 如果保存失败，从列表中移除新添加的任务
+    if (isNew) {
+      scheduledTasks.value = scheduledTasks.value.filter(t => t.id !== taskData.id);
+    }
+    message.error("保存任务失败: " + (error.message || "未知错误"));
+    return;
+  }
 
   // Add log entry for task save
   addTaskSaveLog(taskData, isNew, addLog);
@@ -3218,7 +3280,25 @@ const toggleTaskEnabled = async (taskId, enabled) => {
   const task = scheduledTasks.value.find((t) => t.id === taskId);
   if (task) {
     task.enabled = enabled;
-    await saveScheduledTasks();
+    
+    // 检查是否使用后端API
+    const useBackend = await apiService.shouldUseBackend();
+    if (useBackend && task._synced) {
+      // 更新后端
+      const result = await apiService.updateTask(taskId, { 
+        enabled,
+        is_active: enabled 
+      });
+      if (!result.success) {
+        console.error('Failed to update task status:', result.error);
+        message.error('更新任务状态失败');
+        task.enabled = !enabled; // 回滚
+        return;
+      }
+    } else {
+      await saveScheduledTasks();
+    }
+    
     message.success(`定时任务已${enabled ? "启用" : "禁用"}`);
     addLog({
       time: new Date().toLocaleTimeString(),

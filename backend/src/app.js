@@ -20,7 +20,21 @@ app.use((req, res, next) => {
 
 // 健康检查
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    service: 'xyzw-backend',
+    uptime: process.uptime()
+  });
+});
+
+// 保活接口（用于外部 cron 服务调用）
+app.get('/ping', (req, res) => {
+  res.json({ 
+    status: 'awake', 
+    timestamp: new Date().toISOString(),
+    scheduledTasks: global.taskService?.getTaskStats?.() || { scheduledTasks: 0 }
+  });
 });
 
 // API 路由
