@@ -4,7 +4,7 @@
 
 import express from 'express';
 import TokenService from '../services/TokenService.js';
-import logger from '../utils/logger.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 

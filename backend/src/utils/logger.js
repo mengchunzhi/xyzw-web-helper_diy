@@ -1,7 +1,7 @@
 import winston from 'winston';
 import { config } from '../config/index.js';
 
-const logger = winston.createLogger({
+export const logger = winston.createLogger({
   level: config.log.level,
   format: winston.format.combine(
     winston.format.timestamp({
@@ -26,5 +26,3 @@ const logger = winston.createLogger({
     })
   ]
 });
-
-export default logger;

@@ -3,7 +3,7 @@
  */
 
 import WebSocket from 'ws';
-import logger from '../utils/logger.js';
+import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
 import { supabase } from '../config/supabase.js';
 
