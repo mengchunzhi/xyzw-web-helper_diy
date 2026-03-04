@@ -59,14 +59,33 @@ class TokenSettingsService {
    */
   async saveSettings(tokenId, settings, templateId = null) {
     try {
+      // 验证 tokenId 是否是有效的 UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(tokenId)) {
+        logger.error(`无效的Token ID格式: ${tokenId}`);
+        throw new Error(`无效的Token ID格式: ${tokenId}`);
+      }
+
+      // 检查 token 是否存在
+      const { data: tokenData, error: tokenError } = await supabase
+        .from('tokens')
+        .select('id')
+        .eq('id', tokenId)
+        .single();
+
+      if (tokenError || !tokenData) {
+        logger.error(`Token不存在: ${tokenId}`);
+        throw new Error(`Token不存在: ${tokenId}`);
+      }
+
       const settingsData = {
         token_id: tokenId,
         settings: settings,
-        template_id: templateId,
+        template_id: templateId || null,
         updated_at: new Date().toISOString()
       };
 
-      // 检查是否已存在
+      // 检查是否已存在设置
       const existing = await this.getSettingsByTokenId(tokenId);
 
       let result;
