@@ -538,7 +538,10 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-if="!tokenStore.hasTokens && !showImportForm" class="empty-state-container">
+      <div v-if="isLoading" class="empty-state-container">
+        <n-spin size="large" description="加载中..." />
+      </div>
+      <div v-else-if="!tokenStore.hasTokens && !showImportForm" class="empty-state-container">
         <a-empty>
           <template #image>
             <i class="mdi:bed-empty" style="font-size: 64px; color: var(--text-tertiary)"></i>
@@ -1781,12 +1784,22 @@ const handleUrlParams = async () => {
 // 监听路由参数变化
 watch(() => [props.token, props.api], handleUrlParams, { immediate: false });
 
+// 加载状态
+const isLoading = ref(true);
+
 // 生命周期
 onMounted(async () => {
-  tokenStore.initTokenStore();
+  // 显示加载状态
+  isLoading.value = true;
+  
+  // 初始化 token store（从后端加载 token）
+  await tokenStore.initTokenStore();
 
   // 处理URL参数
   await handleUrlParams();
+
+  // 加载完成
+  isLoading.value = false;
 
   // 如果没有token且没有URL参数，显示导入表单
   if (!tokenStore.hasTokens && !props.token && !props.api) {

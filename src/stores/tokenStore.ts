@@ -1411,59 +1411,44 @@ export const useTokenStore = defineStore("tokens", () => {
   };
 
   // 初始化
-  const initTokenStore = () => {
-    // // 恢复数据
-    // const savedTokens = localStorage.getItem('gameTokens')
-    // const savedSelectedId = localStorage.getItem('selectedTokenId')
-
-    // if (savedTokens) {
-    //   try {
-    //     gameTokens.value = JSON.parse(savedTokens)
-    //   } catch (error) {
-    //     tokenLogger.error('解析Token数据失败:', error.message)
-    //     gameTokens.value = []
-    //   }
-    // }
-
-    // if (savedSelectedId) {
-    //   selectedTokenId.value = savedSelectedId
-    // }
-
+  const initTokenStore = async () => {
     // 清理过期token
     cleanExpiredTokens();
     // 启动连接监控
     connectionMonitor.startMonitoring();
 
     // 从后端加载 token 列表
-    import('@/config').then(({ default: config }) => {
+    try {
+      const config = (await import('@/config')).default;
       if (config.api.useBackend) {
-        import('@/services/apiService').then(({ default: apiService }) => {
-          apiService.getTokens().then((result) => {
-            if (result.success) {
-              // 清空本地 token 列表
-              gameTokens.value = [];
-              // 添加从后端获取的 token
-              result.data.forEach((token) => {
-                gameTokens.value.push({
-                  id: token.id,
-                  name: token.name,
-                  token: token.token,
-                  wsUrl: token.ws_url,
-                  server: token.server,
-                  remark: token.remark,
-                  importMethod: token.import_method,
-                  sourceUrl: token.source_url,
-                  avatar: token.avatar,
-                  isActive: token.is_active,
-                  createdAt: token.created_at,
-                  updatedAt: token.updated_at
-                });
-              });
-            }
+        const apiService = (await import('@/services/apiService')).default;
+        const result = await apiService.getTokens();
+        if (result.success) {
+          // 清空本地 token 列表
+          gameTokens.value = [];
+          // 添加从后端获取的 token
+          result.data.forEach((token) => {
+            gameTokens.value.push({
+              id: token.id,
+              name: token.name,
+              token: token.token,
+              wsUrl: token.ws_url,
+              server: token.server,
+              remark: token.remark,
+              importMethod: token.import_method,
+              sourceUrl: token.source_url,
+              avatar: token.avatar,
+              isActive: token.is_active,
+              createdAt: token.created_at,
+              updatedAt: token.updated_at
+            });
           });
-        });
+          tokenLogger.info(`从后端加载了 ${gameTokens.value.length} 个Token`);
+        }
       }
-    });
+    } catch (error) {
+      tokenLogger.error('加载Token失败:', error);
+    }
 
     // 设置跨标签页监听
     setupCrossTabListener();
