@@ -1391,6 +1391,7 @@ const importTokenFile = async () => {
             const existingTokens = existingTokensResult.success ? (existingTokensResult.data || []) : [];
             const existingTokenIds = new Set(existingTokens.map(t => t.id));
             const existingTokenStrings = new Set(existingTokens.map(t => t.token));
+            const existingTokenNames = new Map(existingTokens.map(t => [t.name, t]));
             
             // 用于存储 ID 映射（旧ID -> 新ID）
             const tokenIdMap = new Map();
@@ -1425,9 +1426,10 @@ const importTokenFile = async () => {
                     continue;
                   }
                   
-                  // 检查是否已存在（按 ID 或 token 字符串）
+                  // 检查是否已存在（按 ID、token 字符串或名称）
                   const existsById = existingTokenIds.has(tokenInfo.id);
                   const existsByToken = existingTokenStrings.has(tokenInfo.token);
+                  const existsByName = existingTokenNames.has(tokenInfo.name);
                   
                   if (existsById) {
                     console.log('跳过已存在的Token（ID相同）:', tokenInfo.id);
@@ -1447,6 +1449,17 @@ const importTokenFile = async () => {
                     }
                     skippedTokens++;
                     continue;
+                  }
+                  
+                  // 按名称检查重复（处理 token 刷新后字符串变化的情况）
+                  if (existsByName && tokenInfo.name) {
+                    const existingToken = existingTokenNames.get(tokenInfo.name);
+                    if (existingToken) {
+                      console.log('跳过已存在的Token（名称相同）:', tokenInfo.name, 'ID映射:', tokenInfo.id, '->', existingToken.id);
+                      tokenIdMap.set(tokenInfo.id, existingToken.id);
+                      skippedTokens++;
+                      continue;
+                    }
                   }
                   
                   // 创建新 Token

@@ -564,6 +564,7 @@ const importTokens = async ({ file }) => {
         const existingTokens = existingTokensResult.success ? (existingTokensResult.data || []) : [];
         const existingTokenIds = new Set(existingTokens.map(t => t.id));
         const existingTokenStrings = new Set(existingTokens.map(t => t.token));
+        const existingTokenNames = new Map(existingTokens.map(t => [t.name, t]));
         
         // 1. 导入 Token 列表 (兼容 gameTokens 和 tokens 字段)
         const tokensToImport = importData.tokens || importData.gameTokens;
@@ -595,9 +596,10 @@ const importTokens = async ({ file }) => {
                 continue;
               }
               
-              // 检查是否已存在（按 ID 或 token 字符串）
+              // 检查是否已存在（按 ID、token 字符串或名称）
               const existsById = existingTokenIds.has(tokenInfo.id);
               const existsByToken = existingTokenStrings.has(tokenInfo.token);
+              const existsByName = existingTokenNames.has(tokenInfo.name);
               
               if (existsById) {
                 console.log('跳过已存在的Token（ID相同）:', tokenInfo.id);
@@ -616,6 +618,17 @@ const importTokens = async ({ file }) => {
                 }
                 skippedTokens++;
                 continue;
+              }
+              
+              // 按名称检查重复（处理 token 刷新后字符串变化的情况）
+              if (existsByName && tokenInfo.name) {
+                const existingToken = existingTokenNames.get(tokenInfo.name);
+                if (existingToken) {
+                  tokenIdMap.set(tokenInfo.id, existingToken.id);
+                  console.log('跳过已存在的Token（名称相同）:', tokenInfo.name, '映射:', tokenInfo.id, '->', existingToken.id);
+                  skippedTokens++;
+                  continue;
+                }
               }
               
               // 创建新 Token
