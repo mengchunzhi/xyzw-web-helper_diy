@@ -64,6 +64,9 @@ class WebSocketClient {
     this.heartbeatInterval = config.websocket.heartbeatInterval;
     this.connected = false;
     this.isReconnecting = false;
+    // 最近一次关闭信息，用于上层诊断错误
+    this.lastCloseCode = null;
+    this.lastCloseReason = null;
     this.promises = {};
     this.messageListeners = [];
   }
@@ -123,6 +126,9 @@ class WebSocketClient {
 
     this.socket.onclose = (event) => {
       logger.info(`WebSocket连接关闭: ${this.tokenId}, 代码: ${event.code}, 原因: ${event.reason}`);
+      // 记录最近一次关闭详情，便于上层根据 code 做区分
+      this.lastCloseCode = event.code;
+      this.lastCloseReason = event.reason || '';
       this.connected = false;
       this._clearTimers();
       this._updateConnectionStatus('disconnected');
@@ -488,13 +494,32 @@ class WebSocketService {
    */
   async waitForConnection(tokenId, timeout = 30000) {
     const start = Date.now();
+    let lastError = null;
+
     while (Date.now() - start < timeout) {
       const client = this.clients.get(tokenId);
-      if (client && client.connected) {
+      if (!client) {
+        break;
+      }
+
+      if (client.connected) {
         return true;
+      }
+
+      // 如果最近一次关闭是 1006，说明服务端主动异常断开，直接给出更明确的错误
+      if (client.lastCloseCode === 1006) {
+        lastError = new Error(
+          `服务器异常关闭连接(code=1006)，请检查 Token 是否有效或协议实现是否正确`,
+        );
+        break;
       }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
+
+    if (lastError) {
+      throw lastError;
+    }
+
     throw new Error('连接超时');
   }
 

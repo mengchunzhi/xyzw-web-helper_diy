@@ -349,8 +349,25 @@ class TaskService {
       // 创建执行记录
       await this.createExecutionRecord(executionId, task.id, token.id, 'running');
 
-      // 建立WebSocket连接
-      const wsClient = await WebSocketService.createConnection(token.id, token.token, token.ws_url);
+      // 兼容前端逻辑：如果数据库中存的是 Base64/包装格式，先解析出实际 game token
+      let actualToken = token.token;
+      try {
+        const parsed = TokenService.parseBase64Token(token.token);
+        if (parsed && parsed.success && parsed.data && parsed.data.actualToken) {
+          actualToken = parsed.data.actualToken;
+        }
+      } catch (e) {
+        // 解析失败时退回原始 token，由 validateToken 做最终校验
+        logger.warn(`Token解析失败，使用原始值: ${token.id}, ${e.message}`);
+      }
+
+      // 后端再次校验 token，有问题直接报错，避免无效 token 反复 1006
+      if (!TokenService.validateToken(actualToken)) {
+        throw new Error('Token 无效或格式错误');
+      }
+
+      // 建立WebSocket连接（使用解析后的实际 token）
+      const wsClient = await WebSocketService.createConnection(token.id, actualToken, token.ws_url);
 
       // 执行任务步骤
       executionResult = await this.executeTaskSteps(task, token, wsClient);
