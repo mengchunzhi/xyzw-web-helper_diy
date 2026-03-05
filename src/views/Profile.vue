@@ -101,6 +101,24 @@
       <h2>Token管理</h2>
       <TokenManager />
 
+      <h2>API密钥设置</h2>
+      <a-card>
+        <a-form>
+          <a-form-item label="后端API密钥">
+            <a-input
+              v-model:value="apiKeyForm.apiKey"
+              type="password"
+              placeholder="请输入API密钥"
+            />
+            <template #extra> 用于访问后端API的密钥 </template>
+          </a-form-item>
+        </a-form>
+        <template #actions>
+          <a-button type="primary" @click="saveApiKey"> 保存API密钥 </a-button>
+          <a-button @click="clearApiKey"> 清除API密钥 </a-button>
+        </template>
+      </a-card>
+
       <h2>账户安全</h2>
       <a-card>
         <div class="security-items">
@@ -146,6 +164,7 @@ import { ref, reactive, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useMessage, useDialog } from "naive-ui";
 import { useAuthStore } from "@/stores/auth";
+import apiService, { setBackendApiKey } from "@/services/apiService";
 
 const router = useRouter();
 const message = useMessage();
@@ -175,6 +194,11 @@ const preferences = reactive({
   language: "zh-CN",
   notifications: true,
   autoExecute: false,
+});
+
+// API密钥表单
+const apiKeyForm = reactive({
+  apiKey: "",
 });
 
 // 密码验证规则
@@ -287,6 +311,45 @@ const deleteAccount = () => {
   });
 };
 
+// API密钥管理
+const saveApiKey = async () => {
+  try {
+    setBackendApiKey(apiKeyForm.apiKey);
+    message.success("API密钥保存成功");
+  } catch (error) {
+    message.error("保存失败，请稍后重试");
+  }
+};
+
+const clearApiKey = async () => {
+  dialog.warning({
+    title: "清除API密钥",
+    content: "确定要清除API密钥吗？这将导致无法访问后端API。",
+    positiveText: "确定清除",
+    negativeText: "取消",
+    onPositiveClick: () => {
+      try {
+        setBackendApiKey("");
+        apiKeyForm.apiKey = "";
+        message.success("API密钥已清除");
+      } catch (error) {
+        message.error("清除失败，请稍后重试");
+      }
+    },
+  });
+};
+
+const loadApiKey = () => {
+  // 从localStorage加载API密钥
+  const API_KEY_STORAGE_KEY = 'xyzw_backend_api_key';
+  if (typeof window !== 'undefined') {
+    const storedApiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (storedApiKey) {
+      apiKeyForm.apiKey = storedApiKey;
+    }
+  }
+};
+
 // 生命周期
 onMounted(() => {
   // 加载用户信息
@@ -303,6 +366,9 @@ onMounted(() => {
       console.error("解析用户偏好失败:", error);
     }
   }
+
+  // 加载API密钥
+  loadApiKey();
 });
 </script>
 
