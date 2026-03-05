@@ -22,14 +22,31 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * 获取单个Token
+ * 获取激活的Token
  */
-router.get('/:id', async (req, res) => {
+router.get('/active/list', async (req, res) => {
   try {
-    const token = await TokenService.getTokenById(req.params.id);
-    res.json({ success: true, data: token });
+    const tokens = await TokenService.getActiveTokens();
+    res.json({ success: true, data: tokens });
   } catch (error) {
-    logger.error(`获取Token失败: ${error.message}`);
+    logger.error(`获取激活Token失败: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 批量更新Token排序
+ */
+router.post('/update-order', async (req, res) => {
+  try {
+    const { orders } = req.body; // orders 格式: [{ id: 'token-id', sort_order: 1 }, ...]
+    if (!Array.isArray(orders)) {
+      return res.status(400).json({ success: false, error: 'orders 必须是数组' });
+    }
+    await TokenService.updateTokensOrder(orders);
+    res.json({ success: true, message: '排序更新成功' });
+  } catch (error) {
+    logger.error(`批量更新Token排序失败: ${error.message}`);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -43,6 +60,19 @@ router.post('/', async (req, res) => {
     res.json({ success: true, data: token });
   } catch (error) {
     logger.error(`创建Token失败: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 获取单个Token
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const token = await TokenService.getTokenById(req.params.id);
+    res.json({ success: true, data: token });
+  } catch (error) {
+    logger.error(`获取Token失败: ${error.message}`);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -69,36 +99,6 @@ router.delete('/:id', async (req, res) => {
     res.json({ success: true, message: 'Token删除成功' });
   } catch (error) {
     logger.error(`删除Token失败: ${error.message}`);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * 获取激活的Token
- */
-router.get('/active/list', async (req, res) => {
-  try {
-    const tokens = await TokenService.getActiveTokens();
-    res.json({ success: true, data: tokens });
-  } catch (error) {
-    logger.error(`获取激活Token失败: ${error.message}`);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * 批量更新Token排序
- */
-router.post('/update-order', async (req, res) => {
-  try {
-    const { orders } = req.body; // orders 格式: [{ id: 'token-id', sort_order: 1 }, ...]
-    if (!Array.isArray(orders)) {
-      return res.status(400).json({ success: false, error: 'orders 必须是数组' });
-    }
-    await TokenService.updateTokensOrder(orders);
-    res.json({ success: true, message: '排序更新成功' });
-  } catch (error) {
-    logger.error(`批量更新Token排序失败: ${error.message}`);
     res.status(500).json({ success: false, error: error.message });
   }
 });
