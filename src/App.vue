@@ -5,18 +5,8 @@
         <n-notification-provider>
           <n-dialog-provider>
             <div id="app">
-              <!-- 无论是否有API密钥，都先显示加载状态 -->
-              <div v-if="!appReady" class="loading-container">
-                <div class="loading-spinner"></div>
-                <p>正在加载应用...</p>
-              </div>
-              <!-- 应用就绪后，根据API密钥状态显示内容 -->
-              <template v-else>
-                <!-- 如果API密钥未设置，显示设置界面 -->
-                <ApiKeySetup v-if="!hasApiKey" />
-                <!-- 否则显示正常应用 -->
-                <router-view v-else />
-              </template>
+              <ApiKeySetup v-if="showApiKeySetup" />
+              <router-view v-else />
             </div>
           </n-dialog-provider>
         </n-notification-provider>
@@ -26,63 +16,53 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
+import { useRouter } from "vue-router";
 import { darkTheme } from "naive-ui";
 import { useTheme } from "@/composables/useTheme";
-import { useApiKey } from "@/composables/useApiKey";
 import ApiKeySetup from "@/components/ApiKeySetup.vue";
 
-const { isDark, initTheme, setupSystemThemeListener, updateReactiveState } =
-  useTheme();
-const { checkApiKey } = useApiKey();
+const router = useRouter();
+const { isDark, initTheme } = useTheme();
 
-const hasApiKey = ref(false);
-const appReady = ref(false);
-let tokenStore = null;
+// 检查是否需要显示API密钥设置
+const API_KEY_STORAGE_KEY = 'xyzw_backend_api_key';
+const showApiKeySetup = ref(true);
+
+// 初始化主题
+initTheme();
 
 // Naive UI 主题
 const naiveTheme = computed(() => {
   return isDark.value ? darkTheme : null;
 });
 
-// 监听主题变化事件
-const handleThemeChange = () => {
-  // 确保响应式状态同步
-  updateReactiveState();
-  // 强制重新渲染
-  setTimeout(() => {
-    updateReactiveState();
-  }, 50);
+// 检查API密钥是否已设置
+const checkApiKey = () => {
+  if (typeof window === 'undefined') return true;
+  const key = localStorage.getItem(API_KEY_STORAGE_KEY);
+  return !!key;
+};
+
+// 监听localStorage变化
+const handleStorageChange = (e) => {
+  if (e.key === API_KEY_STORAGE_KEY) {
+    if (e.newValue) {
+      showApiKeySetup.value = false;
+      // 刷新页面以重新初始化应用
+      window.location.reload();
+    }
+  }
 };
 
 onMounted(() => {
-  initTheme();
-  setupSystemThemeListener();
-
-  // 检查API密钥是否已设置
-  hasApiKey.value = checkApiKey();
-
-  // 如果API密钥未设置，不初始化token store
-  if (hasApiKey.value) {
-    // 动态导入token store以避免初始化问题
-    import("@/stores/tokenStore").then(({ useTokenStore }) => {
-      tokenStore = useTokenStore();
-      tokenStore.initTokenStore();
-    });
+  // 检查是否已有API密钥
+  if (checkApiKey()) {
+    showApiKeySetup.value = false;
   }
-
-  // 监听自定义主题变化事件
-  window.addEventListener("theme-change", handleThemeChange);
-
-  // 初始化时更新状态
-  updateReactiveState();
   
-  // 标记应用就绪
-  appReady.value = true;
-});
-
-onUnmounted(() => {
-  window.removeEventListener("theme-change", handleThemeChange);
+  // 监听localStorage变化
+  window.addEventListener('storage', handleStorageChange);
 });
 </script>
 
@@ -243,36 +223,6 @@ body[data-theme="dark"] .n-popover-container {
   transition:
     background 0.3s ease,
     color 0.3s ease;
-}
-
-.loading-container {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: var(--app-background);
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.loading-container p {
-  margin-top: 16px;
-  color: white;
-  font-size: 16px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* 全局样式重置 */
