@@ -6,6 +6,7 @@ import testRoutes from './api/test.js';
 import tokenSettingsRoutes from './api/tokenSettings.js';
 import taskTemplatesRoutes from './api/taskTemplates.js';
 import globalSettingsRoutes from './api/globalSettings.js';
+import tokenGroupsRoutes from './api/tokenGroups.js';
 import { logger } from './utils/logger.js';
 
 const app = express();
@@ -47,6 +48,7 @@ app.use('/api/test', testRoutes);
 app.use('/api/token-settings', tokenSettingsRoutes);
 app.use('/api/task-templates', taskTemplatesRoutes);
 app.use('/api/global-settings', globalSettingsRoutes);
+app.use('/api/token-groups', tokenGroupsRoutes);
 
 // 404 处理
 app.use((req, res) => {

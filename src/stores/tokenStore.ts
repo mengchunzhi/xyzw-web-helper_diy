@@ -1480,6 +1480,20 @@ export const useTokenStore = defineStore("tokens", () => {
           });
           tokenLogger.info(`从后端加载了 ${gameTokens.value.length} 个Token`);
         }
+
+        // 从后端加载分组
+        const groupsResult = await apiService.getTokenGroups();
+        if (groupsResult.success && groupsResult.data) {
+          tokenGroups.value = groupsResult.data.map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            color: g.color,
+            tokenIds: g.token_ids || [],
+            createdAt: g.created_at,
+            updatedAt: g.updated_at
+          }));
+          tokenLogger.info(`从后端加载了 ${tokenGroups.value.length} 个分组`);
+        }
       }
     } catch (error) {
       tokenLogger.error('加载Token失败:', error);
@@ -1505,7 +1519,7 @@ export const useTokenStore = defineStore("tokens", () => {
   /**
    * 创建新的分组
    */
-  const createTokenGroup = (name: string, color: string = "#1677ff") => {
+  const createTokenGroup = async (name: string, color: string = "#1677ff") => {
     const group: TokenGroup = {
       id: "group_" + Date.now() + Math.random().toString(36).slice(2),
       name,
@@ -1515,23 +1529,52 @@ export const useTokenStore = defineStore("tokens", () => {
       updatedAt: new Date().toISOString(),
     };
     tokenGroups.value.push(group);
+
+    // 保存到后端
+    try {
+      const config = (await import('@/config')).default;
+      if (config.api.useBackend) {
+        const apiService = (await import('@/services/apiService')).default;
+        await apiService.createTokenGroup({
+          id: group.id,
+          name: group.name,
+          color: group.color,
+          token_ids: group.tokenIds,
+          created_at: group.createdAt
+        });
+      }
+    } catch (error) {
+      tokenLogger.error('创建分组同步到后端失败:', error);
+    }
+
     return group;
   };
 
   /**
    * 删除分组
    */
-  const deleteTokenGroup = (groupId: string) => {
+  const deleteTokenGroup = async (groupId: string) => {
     const index = tokenGroups.value.findIndex((g) => g.id === groupId);
     if (index !== -1) {
       tokenGroups.value.splice(index, 1);
+
+      // 从后端删除
+      try {
+        const config = (await import('@/config')).default;
+        if (config.api.useBackend) {
+          const apiService = (await import('@/services/apiService')).default;
+          await apiService.deleteTokenGroup(groupId);
+        }
+      } catch (error) {
+        tokenLogger.error('删除分组同步到后端失败:', error);
+      }
     }
   };
 
   /**
    * 更新分组信息
    */
-  const updateTokenGroup = (
+  const updateTokenGroup = async (
     groupId: string,
     updates: Partial<TokenGroup>
   ) => {
@@ -1540,30 +1583,71 @@ export const useTokenStore = defineStore("tokens", () => {
       Object.assign(group, updates, {
         updatedAt: new Date().toISOString(),
       });
+
+      // 同步到后端
+      try {
+        const config = (await import('@/config')).default;
+        if (config.api.useBackend) {
+          const apiService = (await import('@/services/apiService')).default;
+          await apiService.updateTokenGroup(groupId, {
+            name: group.name,
+            color: group.color,
+            token_ids: group.tokenIds
+          });
+        }
+      } catch (error) {
+        tokenLogger.error('更新分组同步到后端失败:', error);
+      }
     }
   };
 
   /**
    * 添加token到分组
    */
-  const addTokenToGroup = (groupId: string, tokenId: string) => {
+  const addTokenToGroup = async (groupId: string, tokenId: string) => {
     const group = tokenGroups.value.find((g) => g.id === groupId);
     if (group && !group.tokenIds.includes(tokenId)) {
       group.tokenIds.push(tokenId);
       group.updatedAt = new Date().toISOString();
+
+      // 同步到后端
+      try {
+        const config = (await import('@/config')).default;
+        if (config.api.useBackend) {
+          const apiService = (await import('@/services/apiService')).default;
+          await apiService.updateTokenGroup(groupId, {
+            token_ids: group.tokenIds
+          });
+        }
+      } catch (error) {
+        tokenLogger.error('添加token到分组同步到后端失败:', error);
+      }
     }
   };
 
   /**
    * 从分组移除token
    */
-  const removeTokenFromGroup = (groupId: string, tokenId: string) => {
+  const removeTokenFromGroup = async (groupId: string, tokenId: string) => {
     const group = tokenGroups.value.find((g) => g.id === groupId);
     if (group) {
       const index = group.tokenIds.indexOf(tokenId);
       if (index !== -1) {
         group.tokenIds.splice(index, 1);
         group.updatedAt = new Date().toISOString();
+
+        // 同步到后端
+        try {
+          const config = (await import('@/config')).default;
+          if (config.api.useBackend) {
+            const apiService = (await import('@/services/apiService')).default;
+            await apiService.updateTokenGroup(groupId, {
+              token_ids: group.tokenIds
+            });
+          }
+        } catch (error) {
+          tokenLogger.error('从分组移除token同步到后端失败:', error);
+        }
       }
     }
   };

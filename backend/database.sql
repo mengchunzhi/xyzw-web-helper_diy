@@ -78,6 +78,16 @@ CREATE TABLE IF NOT EXISTS global_settings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 创建 token_groups 表（Token分组）
+CREATE TABLE IF NOT EXISTS token_groups (
+  id VARCHAR(100) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  color VARCHAR(50) DEFAULT '#1677ff',
+  token_ids UUID[] DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 插入默认全局设置
 INSERT INTO global_settings (id, settings) 
 VALUES ('default', '{

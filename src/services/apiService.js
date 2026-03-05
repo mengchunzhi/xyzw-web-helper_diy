@@ -460,6 +460,92 @@ class ApiService {
       return { success: false, error: error.message };
     }
   }
+
+  // Token分组相关 API
+  async getTokenGroups() {
+    if (!this.shouldUseBackend()) {
+      const groups = localStorage.getItem('tokenGroups');
+      return { success: true, data: groups ? JSON.parse(groups) : [] };
+    }
+
+    try {
+      const response = await apiClient.get('/api/token-groups');
+      return response.data;
+    } catch (error) {
+      console.error('获取Token分组失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async createTokenGroup(groupData) {
+    if (!this.shouldUseBackend()) {
+      const groups = JSON.parse(localStorage.getItem('tokenGroups') || '[]');
+      groups.push(groupData);
+      localStorage.setItem('tokenGroups', JSON.stringify(groups));
+      return { success: true, data: groupData };
+    }
+
+    try {
+      const response = await apiClient.post('/api/token-groups', groupData);
+      return response.data;
+    } catch (error) {
+      console.error('创建Token分组失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async updateTokenGroup(id, updates) {
+    if (!this.shouldUseBackend()) {
+      const groups = JSON.parse(localStorage.getItem('tokenGroups') || '[]');
+      const index = groups.findIndex(g => g.id === id);
+      if (index !== -1) {
+        groups[index] = { ...groups[index], ...updates, updatedAt: new Date().toISOString() };
+        localStorage.setItem('tokenGroups', JSON.stringify(groups));
+        return { success: true, data: groups[index] };
+      }
+      return { success: false, error: '分组不存在' };
+    }
+
+    try {
+      const response = await apiClient.put(`/api/token-groups/${id}`, updates);
+      return response.data;
+    } catch (error) {
+      console.error('更新Token分组失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async deleteTokenGroup(id) {
+    if (!this.shouldUseBackend()) {
+      let groups = JSON.parse(localStorage.getItem('tokenGroups') || '[]');
+      groups = groups.filter(g => g.id !== id);
+      localStorage.setItem('tokenGroups', JSON.stringify(groups));
+      return { success: true, message: '分组删除成功' };
+    }
+
+    try {
+      const response = await apiClient.delete(`/api/token-groups/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('删除Token分组失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async syncTokenGroups(groups) {
+    if (!this.shouldUseBackend()) {
+      localStorage.setItem('tokenGroups', JSON.stringify(groups));
+      return { success: true, message: '分组同步成功' };
+    }
+
+    try {
+      const response = await apiClient.post('/api/token-groups/sync', { groups });
+      return response.data;
+    } catch (error) {
+      console.error('同步Token分组失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 // 导出单例

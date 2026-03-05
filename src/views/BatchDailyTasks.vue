@@ -3429,8 +3429,12 @@ const exportConfig = async () => {
     const templatesResult = await apiService.getTaskTemplates();
     const taskTemplatesList = templatesResult.success ? (templatesResult.data || []) : [];
 
+    // 获取分组数据
+    const groupsResult = await apiService.getTokenGroups();
+    const tokenGroupsList = groupsResult.success ? (groupsResult.data || []) : [];
+
     const exportData = {
-      version: "1.3",
+      version: "1.4",
       exportTime: new Date().toISOString(),
       tokens: tokens.value.map((t) => ({
         id: t.id,
@@ -3441,6 +3445,7 @@ const exportConfig = async () => {
         remark: t.remark,
         importMethod: t.importMethod,
         sourceUrl: t.sourceUrl,
+        sortOrder: t.sortOrder,
         upgradedToPermanent: true,
         upgradedAt: t.upgradedAt,
         updatedAt: t.updatedAt,
@@ -3449,6 +3454,14 @@ const exportConfig = async () => {
       batchSettings: { ...batchSettings },
       tokenSettings: tokenSettings,
       taskTemplates: taskTemplatesList,
+      tokenGroups: tokenGroupsList.map((g) => ({
+        id: g.id,
+        name: g.name,
+        color: g.color,
+        tokenIds: g.token_ids || g.tokenIds || [],
+        createdAt: g.created_at || g.createdAt,
+        updatedAt: g.updated_at || g.updatedAt,
+      })),
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], {
@@ -3553,6 +3566,21 @@ const importConfig = async ({ file }) => {
               await apiService.createTaskTemplate({
                 name: template.name,
                 settings: template.settings
+              });
+            }
+          });
+        }
+
+        // Import token groups
+        if (Array.isArray(importData.tokenGroups)) {
+          importData.tokenGroups.forEach(async (group) => {
+            if (group.id && group.name) {
+              await apiService.createTokenGroup({
+                id: group.id,
+                name: group.name,
+                color: group.color || '#1677ff',
+                token_ids: group.tokenIds || [],
+                created_at: group.createdAt
               });
             }
           });

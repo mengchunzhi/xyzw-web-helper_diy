@@ -794,8 +794,14 @@ const handleDrop = async (index, event) => {
   currentTokens.splice(dragIndex.value, 1);
   currentTokens.splice(index, 0, draggedItem);
 
+  // 更新每个token的sortOrder字段
+  const updatedTokens = currentTokens.map((token, idx) => ({
+    ...token,
+    sortOrder: idx
+  }));
+
   // 更新 store
-  tokenStore.gameTokens = currentTokens;
+  tokenStore.gameTokens = updatedTokens;
   
   // 切换到手动排序模式，防止自动排序打乱顺序
   sortConfig.value.field = 'manual';
@@ -803,9 +809,9 @@ const handleDrop = async (index, event) => {
   localStorage.setItem("tokenSortConfig", JSON.stringify(sortConfig.value));
   
   // 保存排序到后端
-  const orders = currentTokens.map((token, idx) => ({
+  const orders = updatedTokens.map((token) => ({
     id: token.id,
-    sort_order: idx
+    sort_order: token.sortOrder
   }));
   
   try {
