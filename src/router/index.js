@@ -92,6 +92,15 @@ const my_routes = [
         }
       },
       {
+        path: 'task-monitor',
+        name: 'TaskMonitor',
+        component: () => import('@/views/TaskMonitor.vue'),
+        meta: {
+          title: '任务监控',
+          requiresToken: true
+        }
+      },
+      {
         path: 'batch-daily-tasks',
         name: 'BatchDailyTasks',
         component: () => import('@/views/BatchDailyTasks.vue'),

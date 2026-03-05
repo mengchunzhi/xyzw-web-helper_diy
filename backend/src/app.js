@@ -8,6 +8,7 @@ import taskTemplatesRoutes from './api/taskTemplates.js';
 import globalSettingsRoutes from './api/globalSettings.js';
 import tokenGroupsRoutes from './api/tokenGroups.js';
 import { logger } from './utils/logger.js';
+import { config } from './config/index.js';
 
 const app = express();
 
@@ -41,7 +42,30 @@ app.get('/ping', (req, res) => {
   });
 });
 
-// API 路由
+// 简单 API Key 校验中间件
+// 使用方式：在请求头中携带 X-API-Key，值为后端环境变量 API_KEY
+// 如果没有显式配置 API_KEY（仍为默认值），则不启用校验，保持开发环境兼容
+const apiKeyMiddleware = (req, res, next) => {
+  const expected = config.security.apiKey;
+  // 默认值视为未配置，为了避免误锁死服务，这种情况下不做校验
+  if (!expected || expected === 'default-api-key') {
+    return next();
+  }
+
+  const provided =
+    req.header('x-api-key') ||
+    req.header('X-API-Key') ||
+    req.query.api_key;
+
+  if (!provided || provided !== expected) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  next();
+};
+
+// API 路由（统一挂在 /api 下，并应用 API Key 保护）
+app.use('/api', apiKeyMiddleware);
 app.use('/api/tokens', tokenRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/test', testRoutes);

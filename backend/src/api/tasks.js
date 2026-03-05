@@ -101,4 +101,35 @@ router.get('/:id/next-execution', async (req, res) => {
   }
 });
 
+/**
+ * 获取任务执行历史
+ * 支持按 tokenId / status / limit 过滤
+ */
+router.get('/:id/executions', async (req, res) => {
+  try {
+    const { status, tokenId, limit } = req.query;
+    const params = {
+      taskId: req.params.id,
+    };
+    if (status) {
+      params.status = status;
+    }
+    if (tokenId) {
+      params.tokenId = tokenId;
+    }
+    if (limit) {
+      const n = parseInt(limit, 10);
+      if (!Number.isNaN(n) && n > 0) {
+        params.limit = n;
+      }
+    }
+
+    const executions = await TaskService.getExecutions(params);
+    res.json({ success: true, data: executions });
+  } catch (error) {
+    logger.error(`获取任务执行历史失败: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

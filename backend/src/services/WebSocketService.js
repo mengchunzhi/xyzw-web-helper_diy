@@ -175,7 +175,7 @@ class WebSocketClient {
    * 发送初始化消息
    */
   _sendInitMessage() {
-    // 发送获取角色信息请求，这是连接后必须发送的初始化消息
+    // 发送获取角色信息请求（仅用于调试/记录，不影响任务执行）
     setTimeout(() => {
       if (this.connected) {
         logger.info(`发送初始化消息: ${this.tokenId}`);
@@ -186,9 +186,10 @@ class WebSocketClient {
           platformExt: 'mix',
           scene: ''
         }, 10000).then(resp => {
-          logger.info(`角色信息获取成功: ${this.tokenId}`);
+          logger.debug(`角色信息获取成功: ${this.tokenId}`);
         }).catch(err => {
-          logger.error(`角色信息获取失败: ${this.tokenId}, ${err.message}`);
+          // 这里的失败通常不影响后续任务执行，降级为调试日志，避免制造误导性的“错误”信息
+          logger.debug(`角色信息获取失败(忽略): ${this.tokenId}, ${err.message}`);
         });
       }
     }, 500);

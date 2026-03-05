@@ -6,6 +6,9 @@ const config = {
     backendUrl: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001',
     // 是否使用后端 API
     useBackend: import.meta.env.VITE_USE_BACKEND === 'true' || false,
+    // 后端 API 密钥（可选，仅在你希望前端自动附带时使用）
+    // 更安全的做法是在前端运行时让用户输入密钥，这个字段可以留空
+    apiKey: import.meta.env.VITE_BACKEND_API_KEY || '',
     // API 超时时间
     timeout: 30000
   },

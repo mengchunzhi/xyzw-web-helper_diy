@@ -11,6 +11,35 @@ const apiClient = axios.create({
   }
 });
 
+// 为后端受保护的 API 附加 X-API-Key
+// 优先顺序：
+// 1. 本地存储中的密钥（用户在浏览器中输入）
+// 2. 配置中的 VITE_BACKEND_API_KEY（可选，用于本地开发）
+const API_KEY_STORAGE_KEY = 'xyzw_backend_api_key';
+let storedApiKey = null;
+
+if (typeof window !== 'undefined') {
+  storedApiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY);
+}
+
+const effectiveApiKey = storedApiKey || config.api.apiKey;
+
+if (effectiveApiKey) {
+  apiClient.defaults.headers['X-API-Key'] = effectiveApiKey;
+}
+
+// 供其他地方在运行时更新 API Key（例如将来在设置页里提供输入框）
+export const setBackendApiKey = (key) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(API_KEY_STORAGE_KEY, key || '');
+  }
+  if (key) {
+    apiClient.defaults.headers['X-API-Key'] = key;
+  } else {
+    delete apiClient.defaults.headers['X-API-Key'];
+  }
+};
+
 // API 服务类
 class ApiService {
   constructor() {
@@ -223,6 +252,27 @@ class ApiService {
       return response.data;
     } catch (error) {
       console.error('获取下次执行时间失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 获取任务执行历史
+   * @param {string} id 任务ID
+   * @param {{ status?: string, tokenId?: string, limit?: number }} params 可选过滤条件
+   */
+  async getTaskExecutions(id, params = {}) {
+    if (!this.shouldUseBackend()) {
+      return { success: true, data: [] };
+    }
+
+    try {
+      const response = await apiClient.get(`/api/tasks/${id}/executions`, {
+        params,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取任务执行历史失败:', error);
       return { success: false, error: error.message };
     }
   }
