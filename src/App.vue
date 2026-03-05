@@ -5,7 +5,10 @@
         <n-notification-provider>
           <n-dialog-provider>
             <div id="app">
-              <router-view />
+              <!-- 如果API密钥未设置，显示设置界面 -->
+              <ApiKeySetup v-if="!hasApiKey" />
+              <!-- 否则显示正常应用 -->
+              <router-view v-else />
             </div>
           </n-dialog-provider>
         </n-notification-provider>
@@ -15,14 +18,19 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { darkTheme } from "naive-ui";
 import { useTheme } from "@/composables/useTheme";
 import { useTokenStore } from "@/stores/tokenStore";
+import { useApiKey } from "@/composables/useApiKey";
+import ApiKeySetup from "@/components/ApiKeySetup.vue";
 
 const { isDark, initTheme, setupSystemThemeListener, updateReactiveState } =
   useTheme();
 const tokenStore = useTokenStore();
+const { checkApiKey } = useApiKey();
+
+const hasApiKey = ref(false);
 
 // Naive UI 主题
 const naiveTheme = computed(() => {
@@ -43,8 +51,14 @@ onMounted(() => {
   initTheme();
   setupSystemThemeListener();
 
-  // 初始化token store
-  tokenStore.initTokenStore();
+  // 检查API密钥是否已设置
+  hasApiKey.value = checkApiKey();
+
+  // 如果API密钥未设置，不初始化token store
+  if (hasApiKey.value) {
+    // 初始化token store
+    tokenStore.initTokenStore();
+  }
 
   // 监听自定义主题变化事件
   window.addEventListener("theme-change", handleThemeChange);

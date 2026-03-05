@@ -11,6 +11,20 @@ const apiClient = axios.create({
   }
 });
 
+// 添加请求拦截器来调试
+apiClient.interceptors.request.use(
+  (config) => {
+    console.log('=== Axios Request ===');
+    console.log('URL:', config.url);
+    console.log('Headers:', config.headers);
+    console.log('X-API-Key header:', config.headers['X-API-Key']);
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // 为后端受保护的 API 附加 X-API-Key
 // 优先顺序：
 // 1. 本地存储中的密钥（用户在浏览器中输入）
@@ -30,14 +44,21 @@ if (effectiveApiKey) {
 
 // 供其他地方在运行时更新 API Key（例如将来在设置页里提供输入框）
 export const setBackendApiKey = (key) => {
+  console.log('=== setBackendApiKey called ===');
+  console.log('Key being set:', key);
+  
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(API_KEY_STORAGE_KEY, key || '');
   }
   if (key) {
     apiClient.defaults.headers['X-API-Key'] = key;
+    console.log('Axios header X-API-Key set to:', key);
   } else {
     delete apiClient.defaults.headers['X-API-Key'];
+    console.log('Axios header X-API-Key removed');
   }
+  
+  console.log('Current axios defaults headers:', apiClient.defaults.headers);
 };
 
 // API 服务类
