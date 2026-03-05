@@ -85,30 +85,41 @@ const handleSubmit = async () => {
   errorMessage.value = '';
   
   try {
-    // 保存API密钥
+    // 先保存API密钥到请求头
     setBackendApiKey(formData.apiKey);
     
     // 测试API连接
     const testResult = await apiService.getTokens();
     
-    if (testResult.success) {
-      // 验证成功
-      message.success('API 密钥验证成功');
-      // 跳转到首页
-      router.push('/home');
-    } else if (testResult.error && !testResult.error.includes('Unauthorized')) {
-      // 验证成功（没有401错误）
+    console.log('API验证结果:', testResult);
+    
+    // 只有当 success 为 true 时才算验证成功
+    if (testResult.success === true) {
       message.success('API 密钥验证成功');
       router.push('/home');
     } else {
       // 验证失败，清除密钥
       setBackendApiKey('');
-      errorMessage.value = testResult.error || 'API 密钥验证失败，请检查密钥是否正确';
+      
+      // 根据错误类型显示不同的错误信息
+      if (testResult.error?.includes('401') || testResult.error?.includes('Unauthorized')) {
+        errorMessage.value = 'API 密钥错误，请检查后重试';
+      } else if (testResult.error?.includes('Network') || testResult.error?.includes('timeout')) {
+        errorMessage.value = '网络错误，请检查后端服务是否运行';
+      } else {
+        errorMessage.value = testResult.error || 'API 密钥验证失败';
+      }
     }
   } catch (error) {
     console.error('API 密钥验证失败:', error);
     setBackendApiKey('');
-    errorMessage.value = 'API 密钥验证失败，请检查后端服务是否运行';
+    
+    // 检查是否是401错误
+    if (error.response?.status === 401 || error.message?.includes('401')) {
+      errorMessage.value = 'API 密钥错误，请检查后重试';
+    } else {
+      errorMessage.value = '验证失败，请检查后端服务是否运行';
+    }
   } finally {
     loading.value = false;
   }

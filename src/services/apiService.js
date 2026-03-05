@@ -2,6 +2,17 @@ import axios from 'axios';
 import config from '@/config';
 import { useTokenStore } from '@/stores/tokenStore';
 
+// API密钥存储键
+const API_KEY_STORAGE_KEY = 'xyzw_backend_api_key';
+
+// 获取存储的API密钥
+const getStoredApiKey = () => {
+  if (typeof window !== 'undefined') {
+    return window.localStorage.getItem(API_KEY_STORAGE_KEY);
+  }
+  return null;
+};
+
 // 创建 axios 实例
 const apiClient = axios.create({
   baseURL: config.api.backendUrl,
@@ -11,54 +22,42 @@ const apiClient = axios.create({
   }
 });
 
-// 添加请求拦截器来调试
+// 请求拦截器 - 确保每个请求都带有API密钥
 apiClient.interceptors.request.use(
-  (config) => {
+  (requestConfig) => {
+    // 每次请求时都从localStorage获取最新的API密钥
+    const storedKey = getStoredApiKey();
+    const effectiveKey = storedKey || config.api.apiKey;
+    
+    if (effectiveKey) {
+      requestConfig.headers['X-API-Key'] = effectiveKey;
+    }
+    
     console.log('=== Axios Request ===');
-    console.log('URL:', config.url);
-    console.log('Headers:', config.headers);
-    console.log('X-API-Key header:', config.headers['X-API-Key']);
-    return config;
+    console.log('URL:', requestConfig.url);
+    console.log('X-API-Key:', requestConfig.headers['X-API-Key'] ? '已设置' : '未设置');
+    
+    return requestConfig;
   },
   (error) => {
     return Promise.reject(error);
   }
 );
 
-// 为后端受保护的 API 附加 X-API-Key
-// 优先顺序：
-// 1. 本地存储中的密钥（用户在浏览器中输入）
-// 2. 配置中的 VITE_BACKEND_API_KEY（可选，用于本地开发）
-const API_KEY_STORAGE_KEY = 'xyzw_backend_api_key';
-let storedApiKey = null;
-
-if (typeof window !== 'undefined') {
-  storedApiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY);
-}
-
-const effectiveApiKey = storedApiKey || config.api.apiKey;
-
-if (effectiveApiKey) {
-  apiClient.defaults.headers['X-API-Key'] = effectiveApiKey;
-}
-
-// 供其他地方在运行时更新 API Key（例如将来在设置页里提供输入框）
+// 供其他地方在运行时更新 API Key
 export const setBackendApiKey = (key) => {
   console.log('=== setBackendApiKey called ===');
-  console.log('Key being set:', key);
+  console.log('Key being set:', key ? '***' : 'empty');
   
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(API_KEY_STORAGE_KEY, key || '');
-  }
-  if (key) {
-    apiClient.defaults.headers['X-API-Key'] = key;
-    console.log('Axios header X-API-Key set to:', key);
-  } else {
-    delete apiClient.defaults.headers['X-API-Key'];
-    console.log('Axios header X-API-Key removed');
+    if (key) {
+      window.localStorage.setItem(API_KEY_STORAGE_KEY, key);
+    } else {
+      window.localStorage.removeItem(API_KEY_STORAGE_KEY);
+    }
   }
   
-  console.log('Current axios defaults headers:', apiClient.defaults.headers);
+  console.log('API Key saved to localStorage');
 };
 
 // API 服务类
@@ -89,6 +88,10 @@ class ApiService {
       return response.data;
     } catch (error) {
       console.error('获取 Token 列表失败:', error);
+      // 检查是否是401错误
+      if (error.response?.status === 401) {
+        return { success: false, error: 'Unauthorized - API密钥错误' };
+      }
       return { success: false, error: error.message };
     }
   }
