@@ -102,6 +102,19 @@ router.get('/:id/next-execution', async (req, res) => {
 });
 
 /**
+ * 清空所有任务执行记录
+ */
+router.delete('/executions', async (req, res) => {
+  try {
+    await TaskService.clearAllExecutions();
+    res.json({ success: true, message: '任务执行记录清空成功' });
+  } catch (error) {
+    logger.error(`清空任务执行记录失败: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 获取任务执行历史
  * 支持按 tokenId / status / limit 过滤
  */
@@ -128,19 +141,6 @@ router.get('/:id/executions', async (req, res) => {
     res.json({ success: true, data: executions });
   } catch (error) {
     logger.error(`获取任务执行历史失败: ${error.message}`);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * 清空所有任务执行记录
- */
-router.delete('/executions', async (req, res) => {
-  try {
-    await TaskService.clearAllExecutions();
-    res.json({ success: true, message: '任务执行记录清空成功' });
-  } catch (error) {
-    logger.error(`清空任务执行记录失败: ${error.message}`);
     res.status(500).json({ success: false, error: error.message });
   }
 });
