@@ -70,26 +70,53 @@
 
     <!-- 下个执行 -->
     <div class="upcoming-section" v-if="upcomingTasks.length > 0">
-      <h2>下个执行</h2>
-      <div class="upcoming-list">
+      <div class="section-header">
+        <h2>下个执行</h2>
+      </div>
+      <div class="upcoming-card">
         <div 
           v-for="task in upcomingTasks" 
           :key="task.id" 
-          class="upcoming-item"
+          class="task-card is-active"
         >
-          <div class="upcoming-info">
-            <span class="task-name">{{ task.name }}</span>
-            <n-tag size="small" :type="task.run_type === 'daily' ? 'info' : 'warning'">
-              {{ task.run_type === 'daily' ? '每天' : 'Cron' }}
+          <div class="task-header">
+            <div class="task-title">
+              <n-icon size="18" color="#18a058">
+                <TimeOutline />
+              </n-icon>
+              <span>{{ task.name }}</span>
+            </div>
+            <n-tag type="success" size="small">
+              即将执行
             </n-tag>
           </div>
-          <div class="upcoming-time">
-            <div class="time-display">
-              {{ formatUpcomingTime(task.nextRunTime) }}
+          
+          <div class="task-info">
+            <div class="info-item">
+              <span class="label">执行时间:</span>
+              <span class="value">{{ formatRunInfo(task) }}</span>
             </div>
-            <div class="time-relative">
-              {{ formatRelativeTime(task.nextRunTime) }}
+            <div class="info-item">
+              <span class="label">下次执行:</span>
+              <span class="value highlight">{{ formatUpcomingTime(task.nextRunTime) }} ({{ formatRelativeTime(task.nextRunTime) }})</span>
             </div>
+          </div>
+
+          <div class="task-actions">
+            <n-button 
+              size="small" 
+              type="primary"
+              @click="runTaskNow(task)"
+              :loading="runningTasks[task.id]"
+            >
+              立即执行
+            </n-button>
+            <n-button 
+              size="small" 
+              @click="showTaskDetail(task)"
+            >
+              查看详情
+            </n-button>
           </div>
         </div>
       </div>
@@ -637,7 +664,7 @@ const taskColumns = [
 
 const activeTaskCount = computed(() => tasks.value.filter(t => t.is_active).length);
 
-// 获取最近会执行的任务（按下次执行时间排序，最多显示5个）
+// 获取最近会执行的任务（只显示1个）
 const upcomingTasks = computed(() => {
   const now = new Date();
   const activeTasks = tasks.value.filter(t => t.is_active);
@@ -663,11 +690,11 @@ const upcomingTasks = computed(() => {
     };
   });
   
-  // 按下次执行时间排序
+  // 按下次执行时间排序，只返回最近的一个
   return tasksWithNextRun
     .filter(t => t.nextRunTime)
     .sort((a, b) => a.nextRunTime - b.nextRunTime)
-    .slice(0, 5);
+    .slice(0, 1);
 });
 
 const hasMoreExecutions = ref(false);
@@ -1499,6 +1526,32 @@ onUnmounted(() => {
 .no-stats {
   padding: 40px 0;
   text-align: center;
+}
+
+.upcoming-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+  }
+
+  .upcoming-card {
+    .task-card {
+      border-color: #18a058;
+      background: linear-gradient(to bottom, #f6ffed, white);
+    }
+  }
+
+  .highlight {
+    color: #18a058;
+    font-weight: 600;
+  }
 }
 
 .tasks-section, .executions-section {
