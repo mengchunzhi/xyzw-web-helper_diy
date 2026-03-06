@@ -148,9 +148,44 @@ class TaskExecutor {
           await this.batchMergeItems();
           break;
 
+        // 传统活动任务领取
+        case 'batchLegacyClaim':
+          await this.batchLegacyClaim();
+          break;
+        case 'batchLegacyGiftSendEnhanced':
+          await this.batchLegacyGiftSendEnhanced();
+          break;
+
         // 换皮闯关
         case 'skinChallenge':
           await this.skinChallenge();
+          break;
+
+        // 日常任务
+        case 'startBatch':
+          await this.startBatch();
+          break;
+        case 'batchStudy':
+          await this.batchStudy();
+          break;
+        case 'batchSmartSendCar':
+          await this.batchSmartSendCar();
+          break;
+        case 'batchClaimCars':
+          await this.batchClaimCars();
+          break;
+
+        // 副本任务
+        case 'batchBuyDreamItems':
+          await this.batchBuyDreamItems();
+          break;
+
+        // 月度任务
+        case 'batchTopUpFish':
+          await this.batchTopUpFish();
+          break;
+        case 'batchTopUpArena':
+          await this.batchTopUpArena();
           break;
 
         // 默认处理
@@ -635,6 +670,163 @@ class TaskExecutor {
       }
     } catch (err) {
       this.addStep(`换皮闯关失败: ${err.message}`);
+    }
+  }
+
+  /**
+   * 传统活动任务领取
+   */
+  async batchLegacyClaim() {
+    this.addStep('开始领取传统活动任务');
+    
+    try {
+      // 尝试获取传统活动任务列表
+      const taskList = await this.send('legacy_gettasklist');
+      
+      if (taskList && taskList.tasks && Array.isArray(taskList.tasks)) {
+        let claimedCount = 0;
+        
+        for (const task of taskList.tasks) {
+          if (task.status === 2) { // 2表示已完成
+            try {
+              await this.send('legacy_claimpayloadtask', { taskId: task.id });
+              claimedCount++;
+              await this.delay(1000); // 避免请求过快
+            } catch (error) {
+              logger.warn(`领取任务 ${task.id} 失败: ${error.message}`);
+              // 继续处理其他任务
+            }
+          }
+        }
+        
+        this.addStep(`领取了 ${claimedCount} 个传统活动任务奖励`);
+      } else {
+        this.addStep('没有可领取的传统活动任务');
+      }
+    } catch (error) {
+      logger.warn(`传统活动任务领取失败: ${error.message}`);
+      // 降级处理：直接尝试领取
+      try {
+        await this.send('legacy_claimpayloadtask', { taskId: 0 });
+        this.addStep('尝试直接领取传统活动任务');
+      } catch (e) {
+        throw new Error(`传统活动任务领取失败: ${e.message}`);
+      }
+    }
+  }
+
+  /**
+   * 传统活动礼物赠送增强版
+   */
+  async batchLegacyGiftSendEnhanced() {
+    this.addStep('开始传统活动礼物赠送');
+    
+    try {
+      // 尝试赠送礼物
+      await this.send('legacy_gift_send', { type: 1 });
+      this.addStep('传统活动礼物赠送成功');
+    } catch (error) {
+      logger.warn(`传统活动礼物赠送失败: ${error.message}`);
+      this.addStep(`传统活动礼物赠送失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 开始批量任务
+   */
+  async startBatch() {
+    this.addStep('开始批量任务');
+    // 这里可以添加初始化逻辑
+    this.addStep('批量任务初始化完成');
+  }
+
+  /**
+   * 批量学习
+   */
+  async batchStudy() {
+    this.addStep('开始批量学习');
+    
+    try {
+      await this.send('skill_studyskill');
+      this.addStep('批量学习完成');
+    } catch (error) {
+      logger.warn(`批量学习失败: ${error.message}`);
+      this.addStep(`批量学习失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 智能发车
+   */
+  async batchSmartSendCar() {
+    this.addStep('开始智能发车');
+    
+    try {
+      await this.send('car_smart_send');
+      this.addStep('智能发车完成');
+    } catch (error) {
+      logger.warn(`智能发车失败: ${error.message}`);
+      this.addStep(`智能发车失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 领取车辆奖励
+   */
+  async batchClaimCars() {
+    this.addStep('开始领取车辆奖励');
+    
+    try {
+      await this.send('car_claimreward');
+      this.addStep('车辆奖励领取完成');
+    } catch (error) {
+      logger.warn(`领取车辆奖励失败: ${error.message}`);
+      this.addStep(`领取车辆奖励失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 购买梦境道具
+   */
+  async batchBuyDreamItems() {
+    this.addStep('开始购买梦境道具');
+    
+    try {
+      await this.send('dream_buyitems');
+      this.addStep('梦境道具购买完成');
+    } catch (error) {
+      logger.warn(`购买梦境道具失败: ${error.message}`);
+      this.addStep(`购买梦境道具失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 月度钓鱼充值
+   */
+  async batchTopUpFish() {
+    this.addStep('开始月度钓鱼充值');
+    
+    try {
+      await this.send('fish_monthly_topup');
+      this.addStep('月度钓鱼充值完成');
+    } catch (error) {
+      logger.warn(`月度钓鱼充值失败: ${error.message}`);
+      this.addStep(`月度钓鱼充值失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 月度竞技场充值
+   */
+  async batchTopUpArena() {
+    this.addStep('开始月度竞技场充值');
+    
+    try {
+      await this.send('arena_monthly_topup');
+      this.addStep('月度竞技场充值完成');
+    } catch (error) {
+      logger.warn(`月度竞技场充值失败: ${error.message}`);
+      this.addStep(`月度竞技场充值失败: ${error.message}`);
     }
   }
 }

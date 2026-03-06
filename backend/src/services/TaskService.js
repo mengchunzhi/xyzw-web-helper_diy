@@ -323,7 +323,12 @@ class TaskService {
       // 获取任务关联的Token
       const tokens = await TokenService.getTokensByIds(task.token_ids);
       
-      for (const token of tokens) {
+      for (const [index, token] of tokens.entries()) {
+        // 避免同时建立太多连接，添加延迟
+        if (index > 0) {
+          logger.info(`等待 ${Math.min(3000, index * 500)}ms 后执行下一个账号`);
+          await new Promise(resolve => setTimeout(resolve, Math.min(3000, index * 500)));
+        }
         await this.executeTaskForToken(task, token);
       }
 
