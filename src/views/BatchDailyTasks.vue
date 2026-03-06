@@ -2739,6 +2739,9 @@ const currentSettings = reactive({
   blackMarketPurchase: true,
 });
 
+// 账号配置缓存 - 页面加载时从后端获取，执行任务时直接使用缓存
+const tokenSettingsCache = ref({});
+
 // Task Template State
 const showTaskTemplateModal = ref(false);
 const showApplyTemplateModal = ref(false);
@@ -3907,6 +3910,8 @@ onMounted(() => {
   // Start countdown timer
   startCountdown();
   loadTaskTemplates();
+  // 加载所有账号配置到缓存
+  loadAllTokenSettings();
 });
 
 // Cleanup countdown interval on unmount
@@ -4516,7 +4521,48 @@ const clearAllItems = () => {
 
 // 注: formationOptions, bossTimesOptions 已从 @/utils/batch 导入
 
-const loadSettings = async (tokenId) => {
+// 从缓存获取账号配置（前端浏览器执行时使用，同步函数）
+const loadSettings = (tokenId) => {
+  const defaultSettings = {
+    arenaFormation: 1,
+    towerFormation: 1,
+    bossFormation: 1,
+    bossTimes: 2,
+    claimBottle: true,
+    payRecruit: true,
+    openBox: true,
+    arenaEnable: true,
+    claimHangUp: true,
+    claimEmail: true,
+    blackMarketPurchase: true,
+  };
+  
+  const cached = tokenSettingsCache.value[tokenId];
+  if (cached) {
+    return { ...defaultSettings, ...cached };
+  }
+  return defaultSettings;
+};
+
+// 从后端API加载所有账号配置并缓存（页面加载时调用）
+const loadAllTokenSettings = async () => {
+  try {
+    const result = await apiService.getAllTokenSettings();
+    if (result.success && result.data) {
+      const cache = {};
+      result.data.forEach((item) => {
+        cache[item.token_id] = item.settings || {};
+      });
+      tokenSettingsCache.value = cache;
+      console.log('已缓存', Object.keys(cache).length, '个账号的配置');
+    }
+  } catch (error) {
+    console.error('加载账号配置失败:', error);
+  }
+};
+
+// 从后端API获取单个账号配置（用于设置弹窗）
+const loadSettingsFromAPI = async (tokenId) => {
   try {
     const defaultSettings = {
       arenaFormation: 1,
@@ -4547,7 +4593,7 @@ const loadSettings = async (tokenId) => {
 const openSettings = async (token) => {
   currentSettingsTokenId.value = token.id;
   currentSettingsTokenName.value = token.name;
-  const saved = await loadSettings(token.id);
+  const saved = await loadSettingsFromAPI(token.id);
   Object.assign(currentSettings, saved);
   showSettingsModal.value = true;
 };
@@ -4559,6 +4605,8 @@ const saveSettings = async () => {
       currentSettings
     );
     if (result.success) {
+      // 更新缓存
+      tokenSettingsCache.value[currentSettingsTokenId.value] = { ...currentSettings };
       message.success(`已保存 ${currentSettingsTokenName.value} 的设置`);
       showSettingsModal.value = false;
     } else {

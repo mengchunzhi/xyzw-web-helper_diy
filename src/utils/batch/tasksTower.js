@@ -44,11 +44,10 @@ export function createTasksTower(deps) {
       if (shouldStop.value) return;
 
       tokenStatus.value[tokenId] = "running";
-
       const token = tokens.value.find((t) => t.id === tokenId);
       // 加载该Token的独立配置，如果未找到则回退到currentSettings
       const tokenSettings = loadSettings ? (loadSettings(tokenId) || currentSettings) : currentSettings;
-
+      
       try {
         addLog({
           time: new Date().toLocaleTimeString(),
@@ -294,7 +293,21 @@ export function createTasksTower(deps) {
 
       const token = tokens.value.find((t) => t.id === tokenId);
       // 加载该Token的独立配置，如果未找到则回退到currentSettings
-      const tokenSettings = loadSettings ? (loadSettings(tokenId) || currentSettings) : currentSettings;
+      let tokenSettings = currentSettings;
+      if (loadSettings) {
+        try {
+          const loadedSettings = await loadSettings(tokenId);
+          if (loadedSettings) {
+            tokenSettings = loadedSettings;
+          }
+        } catch (e) {
+          addLog({
+            time: new Date().toLocaleTimeString(),
+            message: `加载账号配置失败，使用默认配置: ${e.message}`,
+            type: "warning",
+          });
+        }
+      }
 
       try {
         addLog({
