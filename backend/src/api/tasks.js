@@ -5,8 +5,99 @@
 import express from 'express';
 import TaskService from '../services/TaskService.js';
 import { logger } from '../utils/logger.js';
+import supabase from '../config/supabase.js';
 
 const router = express.Router();
+
+/**
+ * 获取今日执行统计
+ */
+router.get('/today-stats', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString();
+    
+    // 获取今日所有执行记录
+    const { data: executions, error } = await supabase
+      .from('task_executions')
+      .select('id, task_id, token_id, status, started_at, result')
+      .gte('started_at', todayStr);
+    
+    if (error) {
+      throw error;
+    }
+    
+    // 按task_id和started_at（精确到分钟）分组，统计调度执行次数
+    const executionGroups = {};
+    executions.forEach(e => {
+      if (!e.task_id) return;
+      // 按分钟分组（同一分钟内的执行算同一次调度）
+      const startTime = new Date(e.started_at);
+      startTime.setSeconds(0, 0);
+      const groupKey = `${e.task_id}_${startTime.toISOString()}`;
+      
+      if (!executionGroups[groupKey]) {
+        executionGroups[groupKey] = {
+          taskId: e.task_id,
+          startedAt: e.started_at,
+          total: 0,
+          success: 0,
+          failed: 0,
+          failedTokens: []
+        };
+      }
+      executionGroups[groupKey].total++;
+      if (e.status === 'completed') {
+        executionGroups[groupKey].success++;
+      } else if (e.status === 'failed') {
+        executionGroups[groupKey].failed++;
+        executionGroups[groupKey].failedTokens.push({
+          tokenId: e.token_id,
+          error: e.result?.error || '未知错误'
+        });
+      }
+    });
+    
+    // 今日执行数 = 调度执行次数
+    const todayExecutedCount = Object.keys(executionGroups).length;
+    
+    // 今日失败数 = 失败的账号数
+    const todayFailedCount = executions.filter(e => e.status === 'failed').length;
+    
+    // 获取任务名称
+    const taskIds = [...new Set(executions.map(e => e.task_id).filter(id => id))];
+    const { data: tasks, error: tasksError } = await supabase
+      .from('tasks')
+      .select('id, name')
+      .in('id', taskIds);
+    
+    if (tasksError) {
+      throw tasksError;
+    }
+    
+    // 组装返回数据
+    const taskExecutions = Object.values(executionGroups).map(group => ({
+      ...group,
+      taskName: tasks.find(t => t.id === group.taskId)?.name || '未知任务'
+    }));
+    
+    // 按时间排序
+    taskExecutions.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+    
+    res.json({
+      success: true,
+      data: {
+        todayExecutedCount,
+        todayFailedCount,
+        taskExecutions
+      }
+    });
+  } catch (error) {
+    logger.error(`获取今日执行统计失败: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 /**
  * 获取所有任务

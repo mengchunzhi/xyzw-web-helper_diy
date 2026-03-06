@@ -42,13 +42,13 @@
           <div class="stat-label">激活任务</div>
         </div>
       </div>
-      <div class="stat-card success" @click="showStatsDetail('success')">
+      <div class="stat-card success" @click="showStatsDetail('executed')">
         <div class="stat-icon">
           <n-icon size="24"><Checkmark /></n-icon>
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ todaySuccessCount }}</div>
-          <div class="stat-label">今日成功</div>
+          <div class="stat-value">{{ todayStats.todayExecutedCount }}</div>
+          <div class="stat-label">今日执行</div>
         </div>
         <div class="stat-action">
           <n-icon><ChevronRight /></n-icon>
@@ -59,7 +59,7 @@
           <n-icon size="24"><CloseCircle /></n-icon>
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ todayFailedCount }}</div>
+          <div class="stat-value">{{ todayStats.todayFailedCount }}</div>
           <div class="stat-label">今日失败</div>
         </div>
         <div class="stat-action">
@@ -68,9 +68,60 @@
       </div>
     </div>
 
+    <!-- 下个执行 -->
+    <div class="upcoming-section" v-if="upcomingTasks.length > 0">
+      <h2>下个执行</h2>
+      <div class="upcoming-list">
+        <div 
+          v-for="task in upcomingTasks" 
+          :key="task.id" 
+          class="upcoming-item"
+        >
+          <div class="upcoming-info">
+            <span class="task-name">{{ task.name }}</span>
+            <n-tag size="small" :type="task.run_type === 'daily' ? 'info' : 'warning'">
+              {{ task.run_type === 'daily' ? '每天' : 'Cron' }}
+            </n-tag>
+          </div>
+          <div class="upcoming-time">
+            <div class="time-display">
+              {{ formatUpcomingTime(task.nextRunTime) }}
+            </div>
+            <div class="time-relative">
+              {{ formatRelativeTime(task.nextRunTime) }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 任务列表 -->
     <div class="tasks-section">
-      <h2>任务列表</h2>
+      <div class="section-header">
+        <h2>任务列表</h2>
+        <div class="view-toggle">
+          <n-button-group size="small">
+            <n-button 
+              :type="viewMode === 'card' ? 'primary' : 'default'"
+              @click="viewMode = 'card'"
+            >
+              <template #icon>
+                <n-icon><GridOutline /></n-icon>
+              </template>
+              卡片
+            </n-button>
+            <n-button 
+              :type="viewMode === 'list' ? 'primary' : 'default'"
+              @click="viewMode = 'list'"
+            >
+              <template #icon>
+                <n-icon><ListOutline /></n-icon>
+              </template>
+              列表
+            </n-button>
+          </n-button-group>
+        </div>
+      </div>
       
       <n-spin :show="loadingTasks">
         <div v-if="tasks.length === 0" class="empty-state">
@@ -83,7 +134,8 @@
           </n-empty>
         </div>
         
-        <div v-else class="tasks-grid">
+        <!-- 卡片视图 -->
+        <div v-else-if="viewMode === 'card'" class="tasks-grid">
           <div 
             v-for="task in tasks" 
             :key="task.id" 
@@ -158,6 +210,16 @@
               </n-button>
             </div>
           </div>
+        </div>
+        
+        <!-- 列表视图 -->
+        <div v-else-if="viewMode === 'list'" class="tasks-list">
+          <n-data-table
+            :columns="taskColumns"
+            :data="tasks"
+            :row-key="row => row.id"
+            :row-class-name="row => row.is_active ? 'row-active' : 'row-paused'"
+          />
         </div>
       </n-spin>
     </div>
@@ -373,56 +435,82 @@
     <!-- 统计详情抽屉 -->
     <n-drawer v-model:show="showStatsDrawer" width="600px">
       <n-drawer-content :title="statsDrawerData?.title || '统计详情'">
-        <div v-if="statsDrawerData && statsDrawerData.executions.length > 0" class="stats-detail">
+        <!-- 今日执行列表 -->
+        <div v-if="statsDrawerData?.type === 'executed' && statsDrawerData.taskExecutions" class="stats-detail">
           <div class="stats-summary">
             <n-tag type="info" size="small">
-              共 {{ statsDrawerData.executions.length }} 条记录
+              共 {{ statsDrawerData.taskExecutions.length }} 次调度
             </n-tag>
           </div>
           
           <div class="stats-list">
             <div 
-              v-for="exec in statsDrawerData.executions" 
-              :key="exec.id" 
+              v-for="exec in statsDrawerData.taskExecutions" 
+              :key="`${exec.taskId}_${exec.startedAt}`" 
               class="stat-item"
-              :class="`status-${exec.status}`"
             >
               <div class="stat-item-header">
-                <span class="task-name">{{ getTaskName(exec.task_id) }}</span>
-                <span class="account-name">{{ getTokenName(exec.token_id) }}</span>
+                <span class="task-name">{{ exec.taskName }}</span>
+                <n-tag :type="exec.failed > 0 ? 'error' : 'success'" size="small">
+                  {{ exec.success }}/{{ exec.total }}
+                </n-tag>
               </div>
               <div class="stat-item-time">
-                {{ formatTime(exec.started_at) }}
+                {{ formatTime(exec.startedAt) }}
               </div>
-              <div class="stat-item-result" v-if="exec.result">
-                <div class="result-summary" @click="toggleResultDetail(exec.id)">
-                  <span>{{ summarizeResult(exec.result) }}</span>
-                  <n-icon><ChevronDownOutline /></n-icon>
+              <div class="stat-item-result" v-if="exec.failedTokens.length > 0">
+                <div class="failed-tokens">
+                  <span class="label">失败账号:</span>
+                  <span v-for="ft in exec.failedTokens" :key="ft.tokenId" class="failed-token">
+                    {{ getTokenName(ft.tokenId) }}: {{ ft.error }}
+                  </span>
                 </div>
-                <div class="result-detail" v-if="expandedResults[exec.id]">
-                  <pre>{{ JSON.stringify(exec.result, null, 2) }}</pre>
-                </div>
-              </div>
-              <div class="stat-item-error" v-if="exec.status === 'failed' && exec.result?.error">
-                <n-alert type="error" :bordered="false" size="small">
-                  {{ exec.result.error }}
-                </n-alert>
               </div>
             </div>
           </div>
         </div>
         
-        <div v-else class="no-stats">
-          <n-empty description="暂无记录" />
+        <!-- 今日失败列表 -->
+        <div v-if="statsDrawerData?.type === 'failed' && statsDrawerData.failedTokens" class="stats-detail">
+          <div class="stats-summary">
+            <n-tag type="error" size="small">
+              共 {{ statsDrawerData.failedTokens.length }} 个失败
+            </n-tag>
+          </div>
+          
+          <div class="stats-list">
+            <div 
+              v-for="(ft, index) in statsDrawerData.failedTokens" 
+              :key="index" 
+              class="stat-item status-failed"
+            >
+              <div class="stat-item-header">
+                <span class="task-name">{{ ft.taskName }}</span>
+                <span class="account-name">{{ getTokenName(ft.tokenId) }}</span>
+              </div>
+              <div class="stat-item-time">
+                {{ formatTime(ft.startedAt) }}
+              </div>
+              <div class="stat-item-error">
+                {{ ft.error }}
+              </div>
+            </div>
+          </div>
         </div>
+        
+        <n-empty v-if="!statsDrawerData || 
+          (statsDrawerData.type === 'executed' && (!statsDrawerData.taskExecutions || statsDrawerData.taskExecutions.length === 0)) ||
+          (statsDrawerData.type === 'failed' && (!statsDrawerData.failedTokens || statsDrawerData.failedTokens.length === 0))" 
+          description="暂无数据" 
+        />
       </n-drawer-content>
     </n-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useMessage, useDialog } from 'naive-ui';
+import { ref, computed, onMounted, onUnmounted, h } from 'vue';
+import { useMessage, useDialog, NButton, NTag } from 'naive-ui';
 import apiService from '@/services/apiService';
 import { useTokenStore } from '@/stores/tokenStore';
 import {
@@ -437,7 +525,10 @@ import {
   PlayCircle,
   PauseCircle,
   HelpCircle,
-  Trash
+  Trash,
+  GridOutline,
+  ListOutline,
+  ChevronForward
 } from '@vicons/ionicons5';
 
 const message = useMessage();
@@ -447,6 +538,11 @@ const tokenStore = useTokenStore();
 const tasks = ref([]);
 const executions = ref([]);
 const taskStats = ref({});
+const todayStats = ref({
+  todayExecutedCount: 0,
+  todayFailedCount: 0,
+  taskExecutions: []
+});
 const selectedTask = ref(null);
 const showDetailDrawer = ref(false);
 
@@ -460,6 +556,7 @@ const autoRefresh = ref(false);
 const expandedResults = ref({});
 const runningTasks = ref({});
 const retryingExecutions = ref({});
+const viewMode = ref('card'); // 'card' or 'list'
 
 let refreshTimer = null;
 let executionOffset = 0;
@@ -479,22 +576,98 @@ const taskOptions = computed(() => {
   ];
 });
 
+const taskColumns = [
+  {
+    title: '任务名称',
+    key: 'name',
+    render: (row) => h('div', { class: 'task-name-cell' }, [
+      h('span', { class: 'task-name' }, row.name)
+    ])
+  },
+  {
+    title: '状态',
+    key: 'is_active',
+    width: 100,
+    render: (row) => h(NTag, {
+      type: row.is_active ? 'success' : 'default',
+      size: 'small'
+    }, () => row.is_active ? '运行中' : '已暂停')
+  },
+  {
+    title: '执行时间',
+    key: 'run_time',
+    width: 150,
+    render: (row) => formatRunInfo(row)
+  },
+  {
+    title: '关联账号',
+    key: 'token_ids',
+    width: 100,
+    render: (row) => `${row.token_ids?.length || 0} 个`
+  },
+  {
+    title: '下次执行',
+    key: 'next_run',
+    width: 150,
+    render: (row) => formatNextRun(row)
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 200,
+    render: (row) => h('div', { class: 'task-actions-cell' }, [
+      h(NButton, {
+        size: 'small',
+        type: row.is_active ? 'warning' : 'success',
+        onClick: () => toggleTaskStatus(row)
+      }, () => row.is_active ? '暂停' : '启用'),
+      h(NButton, {
+        size: 'small',
+        type: 'primary',
+        loading: runningTasks.value[row.id],
+        onClick: () => runTaskNow(row)
+      }, () => '执行'),
+      h(NButton, {
+        size: 'small',
+        onClick: () => showTaskDetail(row)
+      }, () => '详情')
+    ])
+  }
+];
+
 const activeTaskCount = computed(() => tasks.value.filter(t => t.is_active).length);
 
-const todaySuccessCount = computed(() => {
-  const today = new Date().toDateString();
-  return executions.value.filter(e => 
-    e.status === 'completed' && 
-    new Date(e.started_at).toDateString() === today
-  ).length;
-});
-
-const todayFailedCount = computed(() => {
-  const today = new Date().toDateString();
-  return executions.value.filter(e => 
-    e.status === 'failed' && 
-    new Date(e.started_at).toDateString() === today
-  ).length;
+// 获取最近会执行的任务（按下次执行时间排序，最多显示5个）
+const upcomingTasks = computed(() => {
+  const now = new Date();
+  const activeTasks = tasks.value.filter(t => t.is_active);
+  
+  // 计算每个任务的下次执行时间
+  const tasksWithNextRun = activeTasks.map(task => {
+    let nextRun = null;
+    
+    if (task.run_type === 'daily' && task.run_time) {
+      const [hours, minutes] = task.run_time.split(':').map(Number);
+      nextRun = new Date(now);
+      nextRun.setHours(hours, minutes, 0, 0);
+      if (nextRun <= now) {
+        nextRun.setDate(nextRun.getDate() + 1);
+      }
+    } else if (task.run_type === 'cron' && task.cron_expression) {
+      nextRun = calculateNextCronRun(task.cron_expression);
+    }
+    
+    return {
+      ...task,
+      nextRunTime: nextRun
+    };
+  });
+  
+  // 按下次执行时间排序
+  return tasksWithNextRun
+    .filter(t => t.nextRunTime)
+    .sort((a, b) => a.nextRunTime - b.nextRunTime)
+    .slice(0, 5);
 });
 
 const hasMoreExecutions = ref(false);
@@ -506,6 +679,7 @@ const loadTasks = async () => {
     if (res?.success && Array.isArray(res.data)) {
       tasks.value = res.data;
       loadTaskStats();
+      loadTodayStats();
     } else {
       tasks.value = [];
     }
@@ -514,6 +688,17 @@ const loadTasks = async () => {
     message.error('加载任务失败');
   } finally {
     loadingTasks.value = false;
+  }
+};
+
+const loadTodayStats = async () => {
+  try {
+    const res = await apiService.getTodayStats();
+    if (res?.success && res.data) {
+      todayStats.value = res.data;
+    }
+  } catch (error) {
+    console.error('加载今日统计失败:', error);
   }
 };
 
@@ -831,26 +1016,31 @@ const clearExecutionLogs = () => {
 };
 
 const showStatsDetail = (type) => {
-  const today = new Date().toDateString();
-  let filteredExecutions = [];
-  
-  if (type === 'success') {
-    filteredExecutions = executions.value.filter(e => 
-      e.status === 'completed' && 
-      new Date(e.started_at).toDateString() === today
-    );
+  if (type === 'executed') {
+    // 显示今日执行的调度列表
+    statsDrawerData.value = {
+      type,
+      title: '今日执行',
+      taskExecutions: todayStats.value.taskExecutions
+    };
   } else if (type === 'failed') {
-    filteredExecutions = executions.value.filter(e => 
-      e.status === 'failed' && 
-      new Date(e.started_at).toDateString() === today
-    );
+    // 显示今日失败的账号列表
+    const failedTokens = [];
+    todayStats.value.taskExecutions.forEach(exec => {
+      exec.failedTokens.forEach(ft => {
+        failedTokens.push({
+          ...ft,
+          taskName: exec.taskName,
+          startedAt: exec.startedAt
+        });
+      });
+    });
+    statsDrawerData.value = {
+      type,
+      title: '今日失败',
+      failedTokens
+    };
   }
-  
-  statsDrawerData.value = {
-    type,
-    title: type === 'success' ? '今日成功执行' : '今日失败执行',
-    executions: filteredExecutions
-  };
   showStatsDrawer.value = true;
 };
 
@@ -901,6 +1091,31 @@ const formatNextRun = (task) => {
     return `${timeStr} (${diffMins}分钟后)`;
   } else {
     return `${timeStr} (即将执行)`;
+  }
+};
+
+const formatUpcomingTime = (nextRunTime) => {
+  if (!nextRunTime) return '-';
+  return nextRunTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatRelativeTime = (nextRunTime) => {
+  if (!nextRunTime) return '';
+  
+  const now = new Date();
+  const diffMs = nextRunTime - now;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffDays > 0) {
+    return `${diffDays}天后`;
+  } else if (diffHours > 0) {
+    return `${diffHours}小时后`;
+  } else if (diffMins > 0) {
+    return `${diffMins}分钟后`;
+  } else {
+    return '即将执行';
   }
 };
 

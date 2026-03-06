@@ -305,6 +305,20 @@ class ApiService {
     }
   }
 
+  async getTodayStats() {
+    if (!this.shouldUseBackend()) {
+      return { success: true, data: { todayExecutedCount: 0, todayFailedCount: 0, taskExecutions: [] } };
+    }
+
+    try {
+      const response = await apiClient.get('/api/tasks/today-stats');
+      return response.data;
+    } catch (error) {
+      console.error('获取今日执行统计失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   /**
    * 获取任务执行历史
    * @param {string} id 任务ID
