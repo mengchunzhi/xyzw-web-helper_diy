@@ -259,7 +259,9 @@ class TokenService {
         throw error;
       }
 
-      return data;
+      // 按照传入的ids数组顺序排序
+      const tokenMap = new Map(data.map(token => [token.id, token]));
+      return ids.map(id => tokenMap.get(id)).filter(Boolean);
     } catch (error) {
       logger.error(`批量获取Token异常: ${error.message}`);
       throw error;

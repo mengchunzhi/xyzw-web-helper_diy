@@ -3,7 +3,6 @@ import config from '@/config';
 import { useTokenStore } from '@/stores/tokenStore';
 
 // API密钥存储键
-// Updated: 2026-03-06 - 修复清空日志API路径冲突问题
 const API_KEY_STORAGE_KEY = 'xyzw_backend_api_key';
 
 // 获取存储的API密钥

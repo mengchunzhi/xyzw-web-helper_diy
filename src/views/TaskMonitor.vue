@@ -1065,7 +1065,17 @@ const getStatusText = (status) => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
+  // 先加载token列表，以便显示账号名称
+  try {
+    const res = await apiService.getTokens();
+    if (res?.success && Array.isArray(res.data)) {
+      tokenStore.gameTokens.value = res.data;
+    }
+  } catch (error) {
+    console.error('加载Token列表失败:', error);
+  }
+  
   loadTasks();
   loadExecutions();
 });

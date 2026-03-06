@@ -125,7 +125,10 @@ class WebSocketClient {
     };
 
     this.socket.onclose = (event) => {
-      logger.info(`WebSocket连接关闭: ${this.tokenId}, 代码: ${event.code}, 原因: ${event.reason}`);
+      // 只在非主动关闭时输出日志
+      if (event.code !== 1000 && event.code !== 1001 && event.code !== 1005) {
+        logger.info(`WebSocket连接关闭: ${this.tokenId}, 代码: ${event.code}, 原因: ${event.reason}`);
+      }
       // 记录最近一次关闭详情，便于上层根据 code 做区分
       this.lastCloseCode = event.code;
       this.lastCloseReason = event.reason || '';

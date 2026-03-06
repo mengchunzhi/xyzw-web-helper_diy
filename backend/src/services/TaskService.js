@@ -1,6 +1,5 @@
 /**
  * 任务服务
- * Updated: 2026-03-06 - 修复清空日志需要WHERE子句的问题
  */
 
 import { supabase } from '../config/supabase.js';
