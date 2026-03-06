@@ -5403,19 +5403,22 @@ const startBatch = async () => {
 
         await ensureConnection(tokenId);
 
+        // 获取账号配置
+        const tokenSettings = loadSettings(tokenId);
+
         // Create runner with delay settings
         const runner = new DailyTaskRunner(tokenStore, {
           commandDelay: batchSettings.commandDelay,
           taskDelay: batchSettings.taskDelay,
         });
 
-        // Run tasks
+        // Run tasks with account settings
         await runner.run(tokenId, {
           onLog: (log) => addLog(log),
           onProgress: (p) => {
             // 每个token维护自己的进度
           },
-        });
+        }, tokenSettings);
 
         success = true;
         tokenStatus.value[tokenId] = "completed";

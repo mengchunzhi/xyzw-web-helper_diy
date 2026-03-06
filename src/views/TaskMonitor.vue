@@ -72,8 +72,32 @@
     <div class="upcoming-section" v-if="upcomingTasks.length > 0">
       <div class="section-header">
         <h2>下个执行</h2>
+        <div class="view-toggle">
+          <n-button-group size="small">
+            <n-button 
+              :type="viewMode === 'card' ? 'primary' : 'default'"
+              @click="viewMode = 'card'"
+            >
+              <template #icon>
+                <n-icon><GridOutline /></n-icon>
+              </template>
+              卡片
+            </n-button>
+            <n-button 
+              :type="viewMode === 'list' ? 'primary' : 'default'"
+              @click="viewMode = 'list'"
+            >
+              <template #icon>
+                <n-icon><ListOutline /></n-icon>
+              </template>
+              列表
+            </n-button>
+          </n-button-group>
+        </div>
       </div>
-      <div class="upcoming-card">
+      
+      <!-- 卡片视图 -->
+      <div v-if="viewMode === 'card'" class="upcoming-card">
         <div 
           v-for="task in upcomingTasks" 
           :key="task.id" 
@@ -95,6 +119,10 @@
             <div class="info-item">
               <span class="label">执行时间:</span>
               <span class="value">{{ formatRunInfo(task) }}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">关联账号:</span>
+              <span class="value">{{ task.token_ids?.length || 0 }} 个</span>
             </div>
             <div class="info-item">
               <span class="label">下次执行:</span>
@@ -119,6 +147,16 @@
             </n-button>
           </div>
         </div>
+      </div>
+      
+      <!-- 列表视图 -->
+      <div v-else-if="viewMode === 'list'" class="upcoming-list">
+        <n-data-table
+          :columns="upcomingColumns"
+          :data="upcomingTasks"
+          :row-key="row => row.id"
+          :row-class-name="() => 'row-active'"
+        />
       </div>
     </div>
 
@@ -583,7 +621,7 @@ const autoRefresh = ref(false);
 const expandedResults = ref({});
 const runningTasks = ref({});
 const retryingExecutions = ref({});
-const viewMode = ref('card'); // 'card' or 'list'
+const viewMode = ref('list'); // 'card' or 'list'，默认列表
 
 let refreshTimer = null;
 let executionOffset = 0;
@@ -648,6 +686,53 @@ const taskColumns = [
         type: row.is_active ? 'warning' : 'success',
         onClick: () => toggleTaskStatus(row)
       }, () => row.is_active ? '暂停' : '启用'),
+      h(NButton, {
+        size: 'small',
+        type: 'primary',
+        loading: runningTasks.value[row.id],
+        onClick: () => runTaskNow(row)
+      }, () => '执行'),
+      h(NButton, {
+        size: 'small',
+        onClick: () => showTaskDetail(row)
+      }, () => '详情')
+    ])
+  }
+];
+
+const upcomingColumns = [
+  {
+    title: '任务名称',
+    key: 'name',
+    render: (row) => h('div', { class: 'task-name-cell' }, [
+      h('span', { class: 'task-name' }, row.name)
+    ])
+  },
+  {
+    title: '执行时间',
+    key: 'run_time',
+    width: 150,
+    render: (row) => formatRunInfo(row)
+  },
+  {
+    title: '关联账号',
+    key: 'token_ids',
+    width: 100,
+    render: (row) => `${row.token_ids?.length || 0} 个`
+  },
+  {
+    title: '下次执行',
+    key: 'next_run',
+    width: 200,
+    render: (row) => h('span', { class: 'highlight' }, 
+      `${formatUpcomingTime(row.nextRunTime)} (${formatRelativeTime(row.nextRunTime)})`
+    )
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 150,
+    render: (row) => h('div', { class: 'task-actions-cell' }, [
       h(NButton, {
         size: 'small',
         type: 'primary',
@@ -1545,6 +1630,13 @@ onUnmounted(() => {
     .task-card {
       border-color: #18a058;
       background: linear-gradient(to bottom, #f6ffed, white);
+    }
+  }
+
+  .upcoming-list {
+    .highlight {
+      color: #18a058;
+      font-weight: 600;
     }
   }
 
