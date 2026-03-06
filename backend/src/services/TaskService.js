@@ -402,12 +402,43 @@ class TaskService {
     const steps = [];
 
     try {
+      // 从global_settings表获取全局配置
+      let globalSettings = {};
+      try {
+        const GlobalSettingsService = (await import('./GlobalSettingsService.js')).default;
+        globalSettings = await GlobalSettingsService.getSettings();
+        logger.info(`获取到全局配置`);
+      } catch (e) {
+        logger.warn(`获取全局配置失败: ${e.message}`);
+      }
+      
+      // 从token_settings表获取账号独立配置
+      let tokenSettings = {};
+      try {
+        const TokenSettingsService = (await import('./TokenSettingsService.js')).default;
+        const settingsResult = await TokenSettingsService.getSettingsByTokenId(token.id);
+        if (settingsResult && settingsResult.settings) {
+          tokenSettings = settingsResult.settings;
+          logger.info(`获取到账号 ${token.id} 的独立配置`);
+        }
+      } catch (e) {
+        logger.warn(`获取账号 ${token.id} 的独立配置失败: ${e.message}`);
+      }
+      
+      // 合并配置：全局配置 + 任务配置 + 账号独立配置（优先级递增）
+      const mergedSettings = {
+        ...globalSettings,
+        ...task.settings,
+        ...tokenSettings,
+        selectedTasks: task.settings.selectedTasks // 任务列表保持不变
+      };
+      
       // 执行前端选择的具体任务
-      const selectedTasks = task.settings.selectedTasks || [];
+      const selectedTasks = mergedSettings.selectedTasks || [];
       
       if (selectedTasks.length > 0) {
         // 使用TaskExecutor执行任务
-        const executor = new TaskExecutor(wsClient, token, task.settings);
+        const executor = new TaskExecutor(wsClient, token, mergedSettings);
         
         for (const taskName of selectedTasks) {
           steps.push({ name: `执行任务: ${taskName}`, status: 'running' });
