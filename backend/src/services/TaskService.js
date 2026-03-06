@@ -1,5 +1,6 @@
 /**
  * 任务服务
+ * Updated: 2026-03-06 - 修复清空日志需要WHERE子句的问题
  */
 
 import { supabase } from '../config/supabase.js';
@@ -715,7 +716,8 @@ class TaskService {
     try {
       const { error } = await supabase
         .from('task_executions')
-        .delete();
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
 
       if (error) {
         logger.error(`清空任务执行记录失败: ${error.message}`);
