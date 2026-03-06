@@ -12,6 +12,8 @@ export const TeamPlugin = ({
       "team_getteaminforesp",
       "role_gettargetteam",
       "role_gettargetteamresp",
+      "presetteam_getinfo",
+      "presetteam_getinforesp",
     ],
     (data: XyzwSession) => {
       gameLogger.verbose(`收到队伍信息事件: ${data.tokenId}`, data);

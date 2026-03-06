@@ -39,4 +39,17 @@ export const RolePlugin = ({
       }
     }
   });
+
+  // 处理 fight_startlevel 响应，更新 battleVersion
+  onSome(["fight_startlevelresp", "fight_startlevel"], (data: XyzwSession) => {
+    gameLogger.verbose(`收到战斗版本信息事件: ${data.tokenId}`, data);
+    const { body, tokenId } = data;
+    
+    // 更新 battleVersion
+    if (body?.battleData?.version) {
+      const tokenStore = useTokenStore();
+      tokenStore.setBattleVersion(body.battleData.version);
+      gameLogger.debug(`更新 battleVersion: ${body.battleData.version} [${tokenId}]`);
+    }
+  });
 }

@@ -1039,6 +1039,7 @@ export class XyzwWebSocketClient {
       fight_startbossresp: "fight_startboss",
       fight_startlegionbossresp: "fight_startlegionboss",
       fight_startareaarenaresp: "fight_startareaarena",
+      fight_startlevelresp: "fight_startlevel",
       arena_startarearesp: "arena_startarea",
       arena_getareatargetresp: "arena_getareatarget",
       arena_getarearankresp: "arena_getarearank",
@@ -1048,9 +1049,12 @@ export class XyzwWebSocketClient {
       store_buyresp: "store_purchase",
       system_getdatabundleverresp: "system_getdatabundlever",
       tower_claimrewardresp: "tower_claimreward",
+      tower_getinforesp: "tower_getinfo",
       fight_starttowerresp: "fight_starttower",
       evotowerinforesp: "evotower_getinfo",
       evotower_fightresp: "evotower_fight",
+      evotower_readyfightresp: "evotower_readyfight",
+      evotower_claimrewardresp: "evotower_claimreward",
       evotower_getlegionjoinmembersresp: "evotower_getlegionjoinmembers",
       mergeboxinforesp: "mergebox_getinfo",
       mergebox_claimfreeenergyresp: "mergebox_claimfreeenergy",
@@ -1083,6 +1087,7 @@ export class XyzwWebSocketClient {
       // 军团信息
       legion_getinforesp: "legion_getinfo",
       legion_getinforresp: "legion_getinfo",
+      legion_storebuygoodsresp: "legion_storebuygoods",
       // 车辆相关响应映射
       car_getrolecarresp: "car_getrolecar",
       car_refreshresp: "car_refresh",
