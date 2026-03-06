@@ -323,13 +323,16 @@ class TaskService {
       // 获取任务关联的Token
       const tokens = await TokenService.getTokensByIds(task.token_ids);
       
+      // 为同一次任务执行创建统一的开始时间
+      const executionStartTime = new Date().toISOString();
+      
       for (const [index, token] of tokens.entries()) {
         // 避免同时建立太多连接，添加延迟
         if (index > 0) {
           logger.info(`等待 ${Math.min(3000, index * 500)}ms 后执行下一个账号`);
           await new Promise(resolve => setTimeout(resolve, Math.min(3000, index * 500)));
         }
-        await this.executeTaskForToken(task, token);
+        await this.executeTaskForToken(task, token, executionStartTime);
       }
 
       logger.info(`任务执行完成: ${task.name}`);
@@ -341,7 +344,7 @@ class TaskService {
   /**
    * 为单个Token执行任务
    */
-  async executeTaskForToken(task, token) {
+  async executeTaskForToken(task, token, executionStartTime) {
     logger.info(`为Token执行任务: ${task.name}, ${token.name}`);
 
     const executionId = uuidv4();
@@ -351,8 +354,8 @@ class TaskService {
     };
 
     try {
-      // 创建执行记录
-      await this.createExecutionRecord(executionId, task.id, token.id, 'running');
+      // 创建执行记录，使用统一的开始时间
+      await this.createExecutionRecord(executionId, task.id, token.id, 'running', executionStartTime);
 
       // 兼容前端逻辑：如果数据库中存的是 Base64/包装格式，先解析出实际 game token
       let actualToken = token.token;
@@ -609,7 +612,7 @@ class TaskService {
   /**
    * 创建执行记录
    */
-  async createExecutionRecord(id, taskId, tokenId, status) {
+  async createExecutionRecord(id, taskId, tokenId, status, startedAt) {
     try {
       const { error } = await supabase
         .from('task_executions')
@@ -618,7 +621,7 @@ class TaskService {
           task_id: taskId,
           token_id: tokenId,
           status,
-          started_at: new Date().toISOString()
+          started_at: startedAt || new Date().toISOString()
         });
 
       if (error) {
