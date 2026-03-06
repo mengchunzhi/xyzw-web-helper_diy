@@ -11,7 +11,7 @@
         </n-button>
         <n-button @click="clearExecutionLogs" type="warning" :loading="clearingLogs">
           <template #icon>
-            <n-icon><Trash2 /></n-icon>
+            <n-icon><Trash /></n-icon>
           </template>
           清空日志
         </n-button>
@@ -437,7 +437,7 @@ import {
   PlayCircle,
   PauseCircle,
   HelpCircle,
-  Trash2
+  Trash
 } from '@vicons/ionicons5';
 
 const message = useMessage();
