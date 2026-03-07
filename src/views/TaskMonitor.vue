@@ -636,59 +636,178 @@
       :title="editingTask ? '编辑定时任务' : '新增定时任务'"
       style="width: 90%; max-width: 600px"
     >
-      <n-form label-placement="left" label-width="80">
-        <n-form-item label="任务名称" required>
-          <n-input v-model:value="taskForm.name" placeholder="请输入任务名称" />
-        </n-form-item>
-        
-        <n-form-item label="运行类型">
-          <n-radio-group v-model:value="taskForm.runType">
-            <n-radio value="daily">每天固定时间</n-radio>
-            <n-radio value="cron">Cron表达式</n-radio>
-          </n-radio-group>
-        </n-form-item>
-        
-        <n-form-item v-if="taskForm.runType === 'daily'" label="运行时间" required>
-          <n-time-picker v-model:value="taskForm.runTime" format="HH:mm" />
-        </n-form-item>
-        
-        <n-form-item v-if="taskForm.runType === 'cron'" label="Cron表达式" required>
-          <n-input v-model:value="taskForm.cronExpression" placeholder="例如: 0 8 * * *" />
-        </n-form-item>
-        
-        <n-form-item label="选择账号" required>
-          <n-select
-            v-model:value="taskForm.selectedTokens"
-            multiple
-            :options="tokenOptions"
-            placeholder="请选择账号"
-            max-tag-count="5"
-          />
-        </n-form-item>
-        
-        <n-form-item label="选择任务" required>
-          <n-select
-            v-model:value="taskForm.selectedTasks"
-            multiple
-            :options="availableTaskOptions"
-            placeholder="请选择要执行的任务"
-            max-tag-count="5"
-          />
-        </n-form-item>
-        
-        <n-form-item label="启用状态">
-          <n-switch v-model:value="taskForm.isActive" />
-        </n-form-item>
-      </n-form>
-      
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showTaskModal = false">取消</n-button>
-          <n-button type="primary" @click="saveTask" :loading="savingTask">
-            保存
-          </n-button>
-        </n-space>
-      </template>
+      <div class="settings-content">
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label class="setting-label">任务名称</label>
+            <n-input
+              v-model:value="taskForm.name"
+              placeholder="请输入任务名称"
+            />
+          </div>
+          <div class="setting-item">
+            <label class="setting-label">运行类型</label>
+            <n-radio-group
+              v-model:value="taskForm.runType"
+              @update:value="resetRunType"
+            >
+              <n-radio value="daily">每天固定时间</n-radio>
+              <n-radio value="cron">Cron表达式</n-radio>
+            </n-radio-group>
+          </div>
+          <div class="setting-item" v-if="taskForm.runType === 'daily'">
+            <label class="setting-label">运行时间</label>
+            <n-time-picker v-model:value="taskForm.runTime" format="HH:mm" />
+          </div>
+          <div class="setting-item" v-if="taskForm.runType === 'cron'">
+            <label class="setting-label">Cron表达式</label>
+            <n-input
+              v-model:value="taskForm.cronExpression"
+              placeholder="请输入Cron表达式"
+              @input="parseCronExpression"
+            />
+
+            <!-- Cron表达式解析结果 -->
+            <div class="cron-parser" v-if="taskForm.cronExpression">
+              <div v-if="cronValidation.valid" class="cron-validation success">
+                <n-text type="success">✓ {{ cronValidation.message }}</n-text>
+              </div>
+              <div v-else class="cron-validation error">
+                <n-text type="error">✗ {{ cronValidation.message }}</n-text>
+              </div>
+
+              <!-- 未来执行时间 -->
+              <div
+                v-if="cronValidation.valid && cronNextRuns.length > 0"
+                class="cron-next-runs"
+              >
+                <h4>未来5次执行时间：</h4>
+                <ul>
+                  <li v-for="(run, index) in cronNextRuns" :key="index">
+                    {{ run }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+              "
+            >
+              <label class="setting-label">选择账号</label>
+              <n-space size="small">
+                <n-button size="small" @click="selectAllTokens">
+                  全选
+                </n-button>
+                <n-button size="small" @click="deselectAllTokens">
+                  全不选
+                </n-button>
+              </n-space>
+            </div>
+
+            <!-- 分组快速选择 -->
+            <div style="margin-bottom: 12px">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 12px; color: #86909c">
+                  快速选择分组：
+                </div>
+                <n-button type="primary" size="tiny" text @click="showGroupManageModal = true">
+                  管理分组
+                </n-button>
+              </div>
+              <div v-if="tokenGroups.length === 0" style="font-size: 12px; color: #ccc;">
+                暂无分组
+              </div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap">
+                <n-button
+                  v-for="group in tokenGroups"
+                  :key="group.id"
+                  size="small"
+                  :type="taskScheduleSelectedGroupIds.includes(group.id) ? 'primary' : 'default'"
+                  @click="toggleGroupSelection(group)"
+                  :style="{
+                    borderColor: group.color,
+                  }"
+                >
+                  {{ group.name }}
+                </n-button>
+              </div>
+            </div>
+
+            <n-checkbox-group v-model:value="taskForm.selectedTokens">
+              <n-grid :cols="2" :x-gap="12" :y-gap="8">
+                <n-grid-item v-for="token in sortedTokens" :key="token.id">
+                  <n-checkbox :value="token.id">{{ token.name }}</n-checkbox>
+                </n-grid-item>
+              </n-grid>
+            </n-checkbox-group>
+          </div>
+          <div class="setting-item">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+              "
+            >
+              <label class="setting-label">选择任务</label>
+              <n-space size="small">
+                <n-button size="small" @click="selectAllTasks"> 全选 </n-button>
+                <n-button size="small" @click="deselectAllTasks">
+                  全不选
+                </n-button>
+              </n-space>
+            </div>
+            
+            <n-checkbox-group v-model:value="taskForm.selectedTasks">
+              <n-tabs type="line" animated size="small" pane-style="padding-top: 12px;" default-value="daily">
+                <n-tab-pane 
+                  v-for="group in taskGroupDefinitions" 
+                  :key="group.name" 
+                  :name="group.name" 
+                  :tab="group.label"
+                >
+                  <n-grid :cols="2" :x-gap="12" :y-gap="8">
+                    <n-grid-item v-for="task in groupedAvailableTasks[group.name]" :key="task.value">
+                      <n-checkbox :value="task.value">{{ task.label }}</n-checkbox>
+                    </n-grid-item>
+                  </n-grid>
+                </n-tab-pane>
+                
+                <n-tab-pane 
+                  v-if="groupedAvailableTasks['other'] && groupedAvailableTasks['other'].length > 0" 
+                  name="other" 
+                  tab="其他"
+                >
+                  <n-grid :cols="2" :x-gap="12" :y-gap="8">
+                    <n-grid-item v-for="task in groupedAvailableTasks['other']" :key="task.value">
+                      <n-checkbox :value="task.value">{{ task.label }}</n-checkbox>
+                    </n-grid-item>
+                  </n-grid>
+                </n-tab-pane>
+              </n-tabs>
+            </n-checkbox-group>
+          </div>
+          <div class="setting-item">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label class="setting-label">启用状态</label>
+              <n-switch v-model:value="taskForm.isActive" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top: 20px; text-align: right">
+          <n-button @click="showTaskModal = false" style="margin-right: 12px"
+            >取消</n-button
+          >
+          <n-button type="primary" @click="saveTask" :loading="savingTask">保存</n-button>
+        </div>
+      </div>
     </n-modal>
   </div>
 </template>
@@ -697,8 +816,9 @@
 import { ref, computed, onMounted, onUnmounted, h, reactive } from 'vue';
 import { useMessage, useDialog, NButton, NTag } from 'naive-ui';
 import apiService from '@/services/apiService';
-import { useTokenStore } from '@/stores/tokenStore';
+import { useTokenStore, tokenGroups } from '@/stores/tokenStore';
 import { availableTasks } from '@/utils/batch/constants';
+import { validateCronExpression, calculateNextRuns } from '@/utils/batch';
 import {
   Refresh,
   List,
@@ -756,6 +876,53 @@ const taskForm = reactive({
   selectedTokens: [],
   selectedTasks: [],
   isActive: true
+});
+
+// Cron表达式解析相关
+const cronValidation = ref({ valid: true, message: "" });
+const cronNextRuns = ref([]);
+
+// 分组选择相关
+const taskScheduleSelectedGroupIds = ref([]);
+const showGroupManageModal = ref(false);
+
+// 排序后的Token列表
+const sortedTokens = computed(() => {
+  return [...tokenStore.gameTokens].sort((tokenA, tokenB) => {
+    const nameA = tokenA.name?.toLowerCase() || "";
+    const nameB = tokenB.name?.toLowerCase() || "";
+    if (nameA < nameB) return -1;
+    if (nameA > nameB) return 1;
+    return 0;
+  });
+});
+
+// 任务分组定义
+const taskGroupDefinitions = [
+  { name: 'daily', label: '日常', tasks: ['startBatch', 'claimHangUpRewards', 'batchAddHangUpTime', 'resetBottles', 'batchlingguanzi', 'batchclubsign', 'batchStudy', 'batcharenafight', 'batchSmartSendCar', 'batchClaimCars', 'store_purchase', 'collection_claimfreereward', 'batchGenieSweep'] },
+  { name: 'dungeon', label: '副本', tasks: ['climbTower', 'batchmengjing', 'skinChallenge', 'batchClaimPeachTasks', 'batchBuyDreamItems'] },
+  { name: 'baoku', label: '宝库', tasks: ['batchbaoku13', 'batchbaoku45'] },
+  { name: 'weirdTower', label: '怪异塔', tasks: ['climbWeirdTower', 'batchUseItems', 'batchMergeItems', 'batchClaimFreeEnergy'] },
+  { name: 'resource', label: '资源', tasks: ['batchOpenBox', 'batchClaimBoxPointReward', 'batchFish', 'batchRecruit', 'legion_storebuygoods'] },
+  { name: 'legacy', label: '功法', tasks: ['batchLegacyClaim', 'batchLegacyGiftSendEnhanced'] },
+  { name: 'monthly', label: '月度', tasks: ['batchTopUpFish', 'batchTopUpArena'] }
+];
+
+// 计算属性，根据 taskGroupDefinitions 将 availableTasks 分组
+const groupedAvailableTasks = computed(() => {
+  const groups = {};
+  taskGroupDefinitions.forEach(group => {
+    groups[group.name] = availableTasks.filter(task => group.tasks.includes(task.value));
+  });
+  
+  // 处理未分组的任务
+  const groupedTaskValues = taskGroupDefinitions.flatMap(g => g.tasks);
+  const otherTasks = availableTasks.filter(task => !groupedTaskValues.includes(task.value));
+  if (otherTasks.length > 0) {
+    groups['other'] = otherTasks;
+  }
+  
+  return groups;
 });
 
 let refreshTimer = null;
@@ -1158,6 +1325,24 @@ const openEditTaskModal = (task) => {
   taskForm.selectedTasks = task.settings?.selectedTasks || [];
   taskForm.isActive = task.is_active;
   
+  // 解析Cron表达式
+  if (taskForm.cronExpression) {
+    parseCronExpression(taskForm.cronExpression);
+  } else {
+    cronValidation.value = { valid: true, message: "" };
+    cronNextRuns.value = [];
+  }
+  
+  // 根据已选token设置分组选择状态
+  taskScheduleSelectedGroupIds.value = [];
+  tokenGroups.value.forEach(group => {
+    const groupTokenIds = group.tokenIds || [];
+    const allSelected = groupTokenIds.every(id => taskForm.selectedTokens.includes(id));
+    if (allSelected && groupTokenIds.length > 0) {
+      taskScheduleSelectedGroupIds.value.push(group.id);
+    }
+  });
+  
   showTaskModal.value = true;
 };
 
@@ -1173,7 +1358,93 @@ const openNewTaskModal = () => {
   taskForm.selectedTasks = [];
   taskForm.isActive = true;
   
+  // 重置分组选择
+  taskScheduleSelectedGroupIds.value = [];
+  cronValidation.value = { valid: true, message: "" };
+  cronNextRuns.value = [];
+  
   showTaskModal.value = true;
+};
+
+// Cron表达式解析
+const parseCronExpression = (expression) => {
+  const validation = validateCronExpression(expression);
+  cronValidation.value = validation;
+
+  if (!validation.valid) {
+    cronNextRuns.value = [];
+    return;
+  }
+
+  const cronParts = expression.split(" ").filter(Boolean);
+  const [minuteField, hourField, dayOfMonthField, monthField, dayOfWeekField] = cronParts;
+
+  const nextRuns = calculateNextRuns(
+    minuteField,
+    hourField,
+    dayOfMonthField,
+    monthField,
+    dayOfWeekField,
+    5,
+  );
+  cronNextRuns.value = nextRuns;
+};
+
+// 重置运行类型相关字段
+const resetRunType = () => {
+  if (taskForm.runType === "daily") {
+    taskForm.cronExpression = "";
+    cronValidation.value = { valid: true, message: "" };
+    cronNextRuns.value = [];
+  } else {
+    taskForm.runTime = undefined;
+  }
+};
+
+// 全选账号
+const selectAllTokens = () => {
+  taskForm.selectedTokens = sortedTokens.value.map((token) => token.id);
+};
+
+// 取消全选账号
+const deselectAllTokens = () => {
+  taskForm.selectedTokens = [];
+  taskScheduleSelectedGroupIds.value = [];
+};
+
+// 全选任务
+const selectAllTasks = () => {
+  taskForm.selectedTasks = availableTasks.map((task) => task.value);
+};
+
+// 取消全选任务
+const deselectAllTasks = () => {
+  taskForm.selectedTasks = [];
+};
+
+// 切换分组选择
+const toggleGroupSelection = (group) => {
+  const index = taskScheduleSelectedGroupIds.value.indexOf(group.id);
+  // 获取分组中有效的token IDs
+  const groupTokenIds = (group.tokenIds || []).filter(id => 
+    sortedTokens.value.some(t => t.id === id)
+  );
+  
+  if (index > -1) {
+    // 取消选择该分组
+    taskScheduleSelectedGroupIds.value.splice(index, 1);
+    taskForm.selectedTokens = taskForm.selectedTokens.filter(
+      (id) => !groupTokenIds.includes(id),
+    );
+  } else {
+    // 选择该分组
+    taskScheduleSelectedGroupIds.value.push(group.id);
+    groupTokenIds.forEach((id) => {
+      if (!taskForm.selectedTokens.includes(id)) {
+        taskForm.selectedTokens.push(id);
+      }
+    });
+  }
 };
 
 const saveTask = async () => {
@@ -1187,9 +1458,18 @@ const saveTask = async () => {
     return;
   }
   
-  if (taskForm.runType === 'cron' && !taskForm.cronExpression) {
-    message.warning('请输入Cron表达式');
-    return;
+  if (taskForm.runType === 'cron') {
+    if (!taskForm.cronExpression) {
+      message.warning('请输入Cron表达式');
+      return;
+    }
+    
+    // 验证Cron表达式
+    const validation = validateCronExpression(taskForm.cronExpression);
+    if (!validation.valid) {
+      message.warning(validation.message);
+      return;
+    }
   }
   
   if (taskForm.selectedTokens.length === 0) {
@@ -2488,6 +2768,62 @@ onUnmounted(() => {
     .exec-actions {
       margin-left: 0;
       margin-top: 12px;
+    }
+  }
+}
+
+/* Settings Modal Styles */
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.cron-parser {
+  margin-top: 8px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 6px;
+}
+
+.cron-validation {
+  margin-bottom: 8px;
+  
+  &.success {
+    color: #18a058;
+  }
+  
+  &.error {
+    color: #d03050;
+  }
+}
+
+.cron-next-runs {
+  h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: #666;
+  }
+  
+  ul {
+    margin: 0;
+    padding-left: 20px;
+    
+    li {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 4px;
     }
   }
 }
