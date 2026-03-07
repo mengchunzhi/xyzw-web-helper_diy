@@ -527,10 +527,16 @@
             <div 
               v-for="exec in statsDrawerData.taskExecutions" 
               :key="`${exec.taskId}_${exec.startedAt}`" 
-              class="stat-item"
+              class="stat-item clickable"
+              :class="{ expanded: expandedScheduleExecutions[`${exec.taskId}_${exec.startedAt}`] }"
             >
-              <div class="stat-item-header">
-                <span class="task-name">{{ exec.taskName }}</span>
+              <div class="stat-item-header" @click="toggleScheduleExecution(exec)">
+                <div class="header-left">
+                  <n-icon class="expand-icon" :class="{ rotated: expandedScheduleExecutions[`${exec.taskId}_${exec.startedAt}`] }">
+                    <ChevronRight />
+                  </n-icon>
+                  <span class="task-name">{{ exec.taskName }}</span>
+                </div>
                 <n-tag :type="exec.failed > 0 ? 'error' : 'success'" size="small">
                   {{ exec.success }}/{{ exec.total }}
                 </n-tag>
@@ -538,13 +544,50 @@
               <div class="stat-item-time">
                 {{ formatTime(exec.startedAt) }}
               </div>
-              <div class="stat-item-result" v-if="exec.failedTokens.length > 0">
-                <div class="failed-tokens">
-                  <span class="label">失败账号:</span>
-                  <span v-for="ft in exec.failedTokens" :key="ft.tokenId" class="failed-token">
-                    {{ getTokenName(ft.tokenId) }}: {{ ft.error }}
-                  </span>
-                </div>
+              
+              <!-- 展开的执行详情 -->
+              <div 
+                v-if="expandedScheduleExecutions[`${exec.taskId}_${exec.startedAt}`]" 
+                class="execution-details"
+              >
+                <n-spin :show="loadingScheduleExecutions[`${exec.taskId}_${exec.startedAt}`]">
+                  <div v-if="scheduleExecutionDetails[`${exec.taskId}_${exec.startedAt}`]?.length > 0" class="details-list">
+                    <div 
+                      v-for="log in scheduleExecutionDetails[`${exec.taskId}_${exec.startedAt}`]" 
+                      :key="log.id" 
+                      class="detail-log-item"
+                      :class="`status-${log.status}`"
+                    >
+                      <div class="log-header">
+                        <span class="account-name">{{ getTokenName(log.token_id) }}</span>
+                        <n-tag :type="getStatusType(log.status)" size="small">
+                          {{ getStatusText(log.status) }}
+                        </n-tag>
+                      </div>
+                      <div class="log-time">
+                        {{ formatTime(log.started_at) }}
+                        <span v-if="log.completed_at">
+                          (耗时: {{ formatDuration(log.started_at, log.completed_at) }})
+                        </span>
+                      </div>
+                      <div class="log-result" v-if="log.result">
+                        <div class="result-summary" @click="toggleResultDetail(log.id)">
+                          <span>{{ summarizeResult(log.result) }}</span>
+                          <n-icon><ChevronDownOutline /></n-icon>
+                        </div>
+                        <div class="result-detail" v-if="expandedResults[log.id]">
+                          <pre>{{ JSON.stringify(log.result, null, 2) }}</pre>
+                        </div>
+                      </div>
+                      <div class="log-error" v-if="log.status === 'failed' && log.result?.error">
+                        <n-alert type="error" :bordered="false" size="small">
+                          {{ log.result.error }}
+                        </n-alert>
+                      </div>
+                    </div>
+                  </div>
+                  <n-empty v-else-if="!loadingScheduleExecutions[`${exec.taskId}_${exec.startedAt}`]" description="暂无执行记录" size="small" />
+                </n-spin>
               </div>
             </div>
           </div>
@@ -665,6 +708,7 @@ import {
   TimeOutline,
   TimerOutline,
   ChevronDownOutline,
+  ChevronRight,
   PlayCircle,
   PauseCircle,
   HelpCircle,
@@ -1280,6 +1324,9 @@ const loadingLogs = ref(false);
 const clearingLogs = ref(false);
 const showStatsDrawer = ref(false);
 const statsDrawerData = ref(null);
+const expandedScheduleExecutions = ref({});
+const loadingScheduleExecutions = ref({});
+const scheduleExecutionDetails = ref({});
 
 const showTaskDetail = async (task) => {
   selectedTask.value = task;
@@ -1405,6 +1452,36 @@ const showStatsDetail = (type) => {
     };
   }
   showStatsDrawer.value = true;
+};
+
+const toggleScheduleExecution = async (exec) => {
+  const key = `${exec.taskId}_${exec.startedAt}`;
+  
+  if (expandedScheduleExecutions.value[key]) {
+    expandedScheduleExecutions.value[key] = false;
+    return;
+  }
+  
+  expandedScheduleExecutions.value[key] = true;
+  
+  if (!scheduleExecutionDetails.value[key]) {
+    loadingScheduleExecutions.value[key] = true;
+    
+    try {
+      const res = await apiService.getScheduleExecutions(exec.taskId, exec.startedAt);
+      
+      if (res?.success && Array.isArray(res.data)) {
+        scheduleExecutionDetails.value[key] = res.data;
+      } else {
+        scheduleExecutionDetails.value[key] = [];
+      }
+    } catch (error) {
+      console.error('加载调度执行记录失败:', error);
+      scheduleExecutionDetails.value[key] = [];
+    } finally {
+      loadingScheduleExecutions.value[key] = false;
+    }
+  }
 };
 
 const formatRunInfo = (task) => {
@@ -1788,6 +1865,14 @@ onUnmounted(() => {
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
 
+    &.clickable {
+      cursor: pointer;
+    }
+
+    &.expanded {
+      border-color: #18a058;
+    }
+
     &.status-completed {
       border-left: 4px solid #18a058;
       background: linear-gradient(to right, #f6ffed, white);
@@ -1804,6 +1889,20 @@ onUnmounted(() => {
       align-items: center;
       margin-bottom: 8px;
 
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .expand-icon {
+          transition: transform 0.3s;
+
+          &.rotated {
+            transform: rotate(90deg);
+          }
+        }
+      }
+
       .task-name {
         font-weight: 600;
       }
@@ -1818,6 +1917,94 @@ onUnmounted(() => {
       font-size: 12px;
       color: #666;
       margin-bottom: 8px;
+    }
+
+    .execution-details {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed #e8e8e8;
+
+      .details-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .detail-log-item {
+        padding: 10px;
+        background: #fafafa;
+        border-radius: 6px;
+        border-left: 3px solid #ddd;
+
+        &.status-completed {
+          border-left-color: #18a058;
+          background: #f6ffed;
+        }
+
+        &.status-failed {
+          border-left-color: #d03050;
+          background: #fff7f7;
+        }
+
+        &.status-running {
+          border-left-color: #2080f0;
+          background: #f0f7ff;
+        }
+
+        .log-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 6px;
+
+          .account-name {
+            font-weight: 500;
+          }
+        }
+
+        .log-time {
+          font-size: 12px;
+          color: #666;
+          margin-bottom: 6px;
+        }
+
+        .log-result {
+          margin-top: 8px;
+
+          .result-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            background: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+
+            &:hover {
+              background: #f5f5f5;
+            }
+          }
+
+          .result-detail {
+            margin-top: 6px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 4px;
+            overflow-x: auto;
+
+            pre {
+              margin: 0;
+              font-size: 11px;
+              white-space: pre-wrap;
+            }
+          }
+        }
+
+        .log-error {
+          margin-top: 6px;
+        }
+      }
     }
 
     .stat-item-result {

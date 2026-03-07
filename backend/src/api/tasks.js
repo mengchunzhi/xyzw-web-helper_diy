@@ -100,6 +100,41 @@ router.get('/today-stats', async (req, res) => {
 });
 
 /**
+ * 获取特定调度的执行记录详情
+ */
+router.get('/schedule-executions', async (req, res) => {
+  try {
+    const { taskId, startedAt } = req.query;
+    
+    if (!taskId || !startedAt) {
+      return res.status(400).json({ success: false, error: '缺少taskId或startedAt参数' });
+    }
+    
+    const startTime = new Date(startedAt);
+    startTime.setSeconds(0, 0);
+    const endTime = new Date(startTime);
+    endTime.setMinutes(endTime.getMinutes() + 1);
+    
+    const { data: executions, error } = await supabase
+      .from('task_executions')
+      .select('id, task_id, token_id, status, started_at, completed_at, result')
+      .eq('task_id', taskId)
+      .gte('started_at', startTime.toISOString())
+      .lt('started_at', endTime.toISOString())
+      .order('started_at', { ascending: true });
+    
+    if (error) {
+      throw error;
+    }
+    
+    res.json({ success: true, data: executions || [] });
+  } catch (error) {
+    logger.error(`获取调度执行记录失败: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 获取所有任务
  */
 router.get('/', async (req, res) => {

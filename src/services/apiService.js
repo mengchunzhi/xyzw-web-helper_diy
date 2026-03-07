@@ -319,6 +319,22 @@ class ApiService {
     }
   }
 
+  async getScheduleExecutions(taskId, startedAt) {
+    if (!this.shouldUseBackend()) {
+      return { success: true, data: [] };
+    }
+
+    try {
+      const response = await apiClient.get('/api/tasks/schedule-executions', {
+        params: { taskId, startedAt }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取调度执行记录失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   /**
    * 获取任务执行历史
    * @param {string} id 任务ID
