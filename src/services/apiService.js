@@ -335,6 +335,22 @@ class ApiService {
     }
   }
 
+  async getExecutionDetail(taskId, tokenId, startedAt) {
+    if (!this.shouldUseBackend()) {
+      return { success: true, data: null };
+    }
+
+    try {
+      const response = await apiClient.get('/api/tasks/execution-detail', {
+        params: { taskId, tokenId, startedAt }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取执行记录详情失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   /**
    * 获取任务执行历史
    * @param {string} id 任务ID

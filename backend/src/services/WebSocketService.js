@@ -48,6 +48,15 @@ const errorCodeMap = {
 };
 
 /**
+ * 响应命令映射表
+ * 用于处理服务器响应命令与原始请求命令不匹配的情况
+ */
+const responseToCommandMap = {
+  syncresp: ['system_mysharecallback', 'task_claimdailypoint', 'role_commitpassword'],
+  syncrewardresp: ['system_buygold', 'discount_claimreward', 'card_claimreward', 'artifact_lottery', 'genie_sweep', 'genie_buysweep', 'system_signinreward', 'dungeon_selecthero', 'artifact_exchange'],
+};
+
+/**
  * WebSocket客户端类
  */
 class WebSocketClient {
@@ -202,7 +211,7 @@ class WebSocketClient {
    * 处理消息
    */
   _handleMessage(packet) {
-    // 处理Promise响应
+    // 处理Promise响应 - 优先使用resp字段进行响应匹配
     if (packet.resp !== undefined && this.promises[packet.resp]) {
       const promise = this.promises[packet.resp];
       delete this.promises[packet.resp];
@@ -212,6 +221,35 @@ class WebSocketClient {
       } else {
         const errorDesc = errorCodeMap[packet.code] || packet.hint || '未知错误';
         promise.reject(new Error(`服务器错误: ${packet.code} - ${errorDesc}`));
+      }
+      return;
+    }
+
+    // 处理响应命令映射 - 当服务器响应命令与原始请求命令不匹配时
+    const cmd = packet.cmd;
+    if (cmd) {
+      const respCmdKey = typeof cmd === 'string' ? cmd.toLowerCase() : cmd;
+      let originalCmds = responseToCommandMap[respCmdKey];
+      
+      if (originalCmds) {
+        if (typeof originalCmds === 'string') {
+          originalCmds = [originalCmds];
+        }
+        
+        // 查找对应的Promise
+        for (const [requestId, promiseData] of Object.entries(this.promises)) {
+          if (originalCmds.includes(promiseData.originalCmd)) {
+            delete this.promises[requestId];
+            
+            if (packet.code === 0 || packet.code === undefined) {
+              promiseData.resolve(packet.body || packet);
+            } else {
+              const errorDesc = errorCodeMap[packet.code] || packet.hint || '未知错误';
+              promiseData.reject(new Error(`服务器错误: ${packet.code} - ${errorDesc}`));
+            }
+            return;
+          }
+        }
       }
     }
   }
@@ -360,7 +398,7 @@ class WebSocketClient {
       }
 
       const requestSeq = ++this.seq;
-      this.promises[requestSeq] = { resolve, reject };
+      this.promises[requestSeq] = { resolve, reject, originalCmd: cmd };
 
       // 超时处理
       const timer = setTimeout(() => {

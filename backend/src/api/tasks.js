@@ -135,6 +135,42 @@ router.get('/schedule-executions', async (req, res) => {
 });
 
 /**
+ * 获取单个执行记录详情
+ */
+router.get('/execution-detail', async (req, res) => {
+  try {
+    const { taskId, tokenId, startedAt } = req.query;
+    
+    if (!taskId || !tokenId || !startedAt) {
+      return res.status(400).json({ success: false, error: '缺少taskId、tokenId或startedAt参数' });
+    }
+    
+    const startTime = new Date(startedAt);
+    startTime.setSeconds(0, 0);
+    const endTime = new Date(startTime);
+    endTime.setMinutes(endTime.getMinutes() + 1);
+    
+    const { data: execution, error } = await supabase
+      .from('task_executions')
+      .select('id, task_id, token_id, status, started_at, completed_at, result')
+      .eq('task_id', taskId)
+      .eq('token_id', tokenId)
+      .gte('started_at', startTime.toISOString())
+      .lt('started_at', endTime.toISOString())
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    res.json({ success: true, data: execution });
+  } catch (error) {
+    logger.error(`获取执行记录详情失败: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 获取所有任务
  */
 router.get('/', async (req, res) => {

@@ -604,11 +604,17 @@
           <div class="stats-list">
             <div 
               v-for="(ft, index) in statsDrawerData.failedTokens" 
-              :key="index" 
-              class="stat-item status-failed"
+              :key="`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`" 
+              class="stat-item status-failed clickable"
+              :class="{ expanded: expandedFailedExecutions[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`] }"
             >
-              <div class="stat-item-header">
-                <span class="task-name">{{ ft.taskName }}</span>
+              <div class="stat-item-header" @click="toggleFailedExecution(ft)">
+                <div class="header-left">
+                  <n-icon class="expand-icon" :class="{ rotated: expandedFailedExecutions[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`] }">
+                    <ChevronForward />
+                  </n-icon>
+                  <span class="task-name">{{ ft.taskName }}</span>
+                </div>
                 <span class="account-name">{{ getTokenName(ft.tokenId) }}</span>
               </div>
               <div class="stat-item-time">
@@ -616,6 +622,48 @@
               </div>
               <div class="stat-item-error">
                 {{ ft.error }}
+              </div>
+              
+              <!-- 展开的执行详情 -->
+              <div 
+                v-if="expandedFailedExecutions[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`]" 
+                class="execution-details"
+              >
+                <n-spin :show="loadingFailedExecutions[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`]">
+                  <div v-if="failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`]" class="details-list">
+                    <div 
+                      class="detail-log-item status-failed"
+                    >
+                      <div class="log-header">
+                        <span class="account-name">{{ getTokenName(failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].token_id) }}</span>
+                        <n-tag type="error" size="small">
+                          失败
+                        </n-tag>
+                      </div>
+                      <div class="log-time">
+                        {{ formatTime(failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].started_at) }}
+                        <span v-if="failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].completed_at">
+                          (耗时: {{ formatDuration(failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].started_at, failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].completed_at) }})
+                        </span>
+                      </div>
+                      <div class="log-result" v-if="failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].result">
+                        <div class="result-summary" @click="toggleResultDetail(failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].id)">
+                          <span>{{ summarizeResult(failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].result) }}</span>
+                          <n-icon><ChevronDownOutline /></n-icon>
+                        </div>
+                        <div class="result-detail" v-if="expandedResults[failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].id]">
+                          <pre>{{ JSON.stringify(failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].result, null, 2) }}</pre>
+                        </div>
+                      </div>
+                      <div class="log-error" v-if="failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].result?.error">
+                        <n-alert type="error" :bordered="false" size="small">
+                          {{ failedExecutionDetails[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`].result.error }}
+                        </n-alert>
+                      </div>
+                    </div>
+                  </div>
+                  <n-empty v-else-if="!loadingFailedExecutions[`${ft.taskId}_${ft.tokenId}_${ft.startedAt}`]" description="暂无执行记录" size="small" />
+                </n-spin>
               </div>
             </div>
           </div>
@@ -1600,6 +1648,9 @@ const statsDrawerData = ref(null);
 const expandedScheduleExecutions = ref({});
 const loadingScheduleExecutions = ref({});
 const scheduleExecutionDetails = ref({});
+const expandedFailedExecutions = ref({});
+const loadingFailedExecutions = ref({});
+const failedExecutionDetails = ref({});
 
 const showTaskDetail = async (task) => {
   selectedTask.value = task;
@@ -1713,6 +1764,7 @@ const showStatsDetail = (type) => {
       exec.failedTokens.forEach(ft => {
         failedTokens.push({
           ...ft,
+          taskId: exec.taskId,
           taskName: exec.taskName,
           startedAt: exec.startedAt
         });
@@ -1753,6 +1805,36 @@ const toggleScheduleExecution = async (exec) => {
       scheduleExecutionDetails.value[key] = [];
     } finally {
       loadingScheduleExecutions.value[key] = false;
+    }
+  }
+};
+
+const toggleFailedExecution = async (ft) => {
+  const key = `${ft.taskId}_${ft.tokenId}_${ft.startedAt}`;
+  
+  if (expandedFailedExecutions.value[key]) {
+    expandedFailedExecutions.value[key] = false;
+    return;
+  }
+  
+  expandedFailedExecutions.value[key] = true;
+  
+  if (!failedExecutionDetails.value[key]) {
+    loadingFailedExecutions.value[key] = true;
+    
+    try {
+      const res = await apiService.getExecutionDetail(ft.taskId, ft.tokenId, ft.startedAt);
+      
+      if (res?.success && res.data) {
+        failedExecutionDetails.value[key] = res.data;
+      } else {
+        failedExecutionDetails.value[key] = null;
+      }
+    } catch (error) {
+      console.error('加载执行记录详情失败:', error);
+      failedExecutionDetails.value[key] = null;
+    } finally {
+      loadingFailedExecutions.value[key] = false;
     }
   }
 };
