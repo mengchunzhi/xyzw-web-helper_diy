@@ -380,13 +380,14 @@ class TaskService {
       // 执行任务步骤
       executionResult = await this.executeTaskSteps(task, token, wsClient);
 
-      // 更新执行记录
-      await this.updateExecutionRecord(executionId, 'completed', executionResult);
+      // 更新执行记录 - 使用执行结果中的状态
+      const finalStatus = executionResult.status === 'failed' ? 'failed' : 'completed';
+      await this.updateExecutionRecord(executionId, finalStatus, executionResult);
 
       // 断开连接
       WebSocketService.disconnect(token.id);
 
-      logger.info(`Token任务执行完成: ${task.name}, ${token.name}`);
+      logger.info(`Token任务执行完成: ${task.name}, ${token.name}, 状态: ${finalStatus}`);
     } catch (error) {
       logger.error(`Token任务执行失败: ${task.name}, ${token.name}, ${error.message}`);
       executionResult.status = 'failed';
