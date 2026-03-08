@@ -142,6 +142,11 @@ class WebSocketClient {
     this.lastCloseReason = null;
     this.promises = {};
     this.messageListeners = [];
+    // 重连控制：服务主动断开时不再重连，避免死循环
+    this.shouldReconnect = true;
+    this.reconnectTimerId = null;
+    this.reconnectCount = 0;
+    this.maxReconnectAttempts = 5;
   }
 
   /**
@@ -155,6 +160,7 @@ class WebSocketClient {
     this.socket.onopen = () => {
       logger.info(`WebSocket连接成功: ${this.tokenId}`);
       this.connected = true;
+      this.reconnectCount = 0; // 连接成功则重置重连计数
       this._setupHeartbeat();
       this._processQueueLoop();
       this._updateConnectionStatus('connected');
@@ -209,8 +215,8 @@ class WebSocketClient {
       this._clearTimers();
       this._updateConnectionStatus('disconnected');
       
-      // 如果是异常关闭，尝试重连
-      if (event.code === 1006) {
+      // 异常关闭(1006)时尝试重连，但需满足：未被服务主动断开、未超过最大重连次数
+      if (event.code === 1006 && this.shouldReconnect) {
         this.reconnect();
       }
     };
@@ -493,18 +499,30 @@ class WebSocketClient {
    * 重连
    */
   reconnect() {
+    if (!this.shouldReconnect) {
+      logger.debug(`已由服务主动断开，跳过重连: ${this.tokenId}`);
+      return;
+    }
     if (this.isReconnecting) {
       logger.debug(`重连已在进行中: ${this.tokenId}`);
       return;
     }
+    if (this.reconnectCount >= this.maxReconnectAttempts) {
+      logger.warn(`重连次数已达上限(${this.maxReconnectAttempts})，停止重连: ${this.tokenId}`);
+      return;
+    }
 
     this.isReconnecting = true;
-    logger.info(`开始WebSocket重连: ${this.tokenId}`);
+    this.reconnectCount++;
+    logger.info(`开始WebSocket重连: ${this.tokenId} (第${this.reconnectCount}/${this.maxReconnectAttempts}次)`);
 
-    this.disconnect();
+    this._clearReconnectTimer();
+    this._disconnectInternal();
 
-    // 延迟重连
-    setTimeout(() => {
+    // 延迟重连，指数退避
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectCount - 1), 30000);
+    this.reconnectTimerId = setTimeout(() => {
+      this.reconnectTimerId = null;
       try {
         this.init();
       } finally {
@@ -512,19 +530,39 @@ class WebSocketClient {
           this.isReconnecting = false;
         }, 2000);
       }
-    }, 1000);
+    }, delay);
   }
 
-  /**
-   * 断开连接
-   */
-  disconnect() {
+  _clearReconnectTimer() {
+    if (this.reconnectTimerId) {
+      clearTimeout(this.reconnectTimerId);
+      this.reconnectTimerId = null;
+    }
+  }
+
+  _disconnectInternal() {
     if (this.socket) {
-      this.socket.close();
+      try {
+        this.socket.close();
+      } catch (e) {
+        logger.debug(`关闭socket异常: ${e.message}`);
+      }
       this.socket = null;
     }
     this.connected = false;
     this._clearTimers();
+  }
+
+  /**
+   * 断开连接
+   * @param {Object} opts - { fromService: true } 表示由 TaskService 主动断开，将停止重连
+   */
+  disconnect(opts = {}) {
+    if (opts.fromService) {
+      this.shouldReconnect = false;
+      this._clearReconnectTimer();
+    }
+    this._disconnectInternal();
   }
 
   /**
@@ -640,12 +678,12 @@ class WebSocketService {
   }
 
   /**
-   * 断开连接
+   * 断开连接（由 TaskService 主动调用，会停止客户端的重连循环）
    */
   disconnect(tokenId) {
     const client = this.clients.get(tokenId);
     if (client) {
-      client.disconnect();
+      client.disconnect({ fromService: true });
       this.clients.delete(tokenId);
       if (this.connectionQueue.active > 0) {
         this.connectionQueue.active--;

@@ -393,6 +393,8 @@ class TaskService {
       executionResult.status = 'failed';
       executionResult.error = error.message;
       await this.updateExecutionRecord(executionId, 'failed', executionResult);
+      // 任务失败时也要断开连接，避免 WebSocket 陷入无限重连
+      WebSocketService.disconnect(token.id);
     }
   }
 
