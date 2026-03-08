@@ -50,10 +50,33 @@ const errorCodeMap = {
 /**
  * 响应命令映射表
  * 用于处理服务器响应命令与原始请求命令不匹配的情况
+ * 当服务器返回 cmd: "xxxresp" 而非 resp 字段时，需要此映射才能正确匹配 Promise
  */
 const responseToCommandMap = {
+  // 同步响应（一对多）
   syncresp: ['system_mysharecallback', 'task_claimdailypoint', 'role_commitpassword'],
   syncrewardresp: ['system_buygold', 'discount_claimreward', 'card_claimreward', 'artifact_lottery', 'genie_sweep', 'genie_buysweep', 'system_signinreward', 'dungeon_selecthero', 'artifact_exchange'],
+
+  // 日常任务、挂机、签到相关（后端定时任务常用）
+  system_claimhanguprewardresp: ['system_claimhangupreward'],
+  task_claimdailyrewardresp: ['task_claimdailyreward'],
+  legion_signinresp: ['legion_signin'],
+
+  // 罐子相关
+  bottlehelper_stopresp: ['bottlehelper_stop'],
+  bottlehelper_startresp: ['bottlehelper_start'],
+  bottlehelper_claimresp: ['bottlehelper_claim'],
+
+  // 爬塔、竞技场、军团等
+  tower_getinforesp: ['tower_getinfo'],
+  tower_claimrewardresp: ['tower_claimreward'],
+  fight_starttowerresp: ['fight_starttower'],
+  arena_getareatargetresp: ['arena_getareatarget'],
+  fight_startareaarenaresp: ['fight_startareaarena'],
+  legion_getinforesp: ['legion_getinfo'],
+  legion_getinforresp: ['legion_getinfo'], // 服务端可能的拼写变体
+  legion_claimpayloadtaskresp: ['legion_claimpayloadtask'],
+  legion_claimpayloadtaskprogressresp: ['legion_claimpayloadtaskprogress'],
 };
 
 /**
