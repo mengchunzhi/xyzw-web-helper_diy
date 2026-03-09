@@ -523,6 +523,13 @@
                 </n-button>
                 <n-button
                   size="small"
+                  @click="openHelperModal('pointsBox')"
+                  :disabled="isRunning || selectedTokens.length === 0"
+                >
+                  按积分开箱
+                </n-button>
+                <n-button
+                  size="small"
                   @click="batchClaimBoxPointReward"
                   :disabled="isRunning || selectedTokens.length === 0"
                 >
@@ -1433,7 +1440,22 @@
               size="small"
             />
           </div>
-          <div class="setting-item">
+          <div class="setting-item" v-if="helperType === 'pointsBox'">
+            <label class="setting-label">目标积分</label>
+            <n-input-number
+              v-model:value="helperSettings.targetPoints"
+              :min="1"
+              :max="1000000"
+              :step="100"
+              size="small"
+              style="width: 100%"
+            />
+          </div>
+          <n-alert v-if="helperType === 'pointsBox'" type="info" style="margin-bottom: 12px">
+            开箱优先级: 木质宝箱(保留200个) → 青铜宝箱 → 黄金宝箱 → 铂金宝箱<br/>
+            积分: 木质=1分, 青铜=10分, 黄金=20分, 铂金=50分
+          </n-alert>
+          <div class="setting-item" v-if="helperType !== 'pointsBox'">
             <label class="setting-label">消耗数量（10的倍数）</label>
             <n-input-number
               v-model:value="helperSettings.count"
@@ -2810,10 +2832,11 @@ const helperSettings = reactive({
   boxType: 2001,
   fishType: 1,
   count: 100,
+  targetPoints: 1000,
 });
 
 const helperModalTitle = computed(() => {
-  const titles = { box: "批量开宝箱", fish: "批量钓鱼", recruit: "批量招募" };
+  const titles = { box: "批量开宝箱", fish: "批量钓鱼", recruit: "批量招募", pointsBox: "按积分开箱" };
   return titles[helperType.value] || "批量助手";
 });
 
@@ -2833,6 +2856,7 @@ const batchSettings = reactive({
   fishCount: 100,
   recruitCount: 100,
   defaultBoxType: 2001,
+  targetBoxPoints: 1000,
   defaultFishType: 1,
   receiverId: "",
   password: "",
@@ -4445,10 +4469,11 @@ const confirmLegacyGift = async () => {
 };
 
 const executeHelper = () => {
-  // 验证数量是10的倍数
-  if (helperSettings.count % 10 !== 0 || helperSettings.count < 10) {
-    message.warning("消耗数量必须是10的整数倍，最小为10");
-    return;
+  if (helperType.value !== 'pointsBox') {
+    if (helperSettings.count % 10 !== 0 || helperSettings.count < 10) {
+      message.warning("消耗数量必须是10的整数倍，最小为10");
+      return;
+    }
   }
   showHelperModal.value = false;
   if (helperType.value === "box") {
@@ -4457,6 +4482,8 @@ const executeHelper = () => {
     batchFish();
   } else if (helperType.value === "recruit") {
     batchRecruit();
+  } else if (helperType.value === "pointsBox") {
+    batchOpenBoxByPoints();
   }
 };
 
@@ -5336,6 +5363,7 @@ const { batchSmartSendCar, batchClaimCars } = tasksCar;
 const tasksItem = createTasksItem(createTaskDeps());
 const {
   batchOpenBox,
+  batchOpenBoxByPoints,
   batchClaimBoxPointReward,
   batchFish,
   batchRecruit,
