@@ -1,0 +1,83 @@
+[33m89fc718[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m 豆包模型尝试修复
+[33mbfb0da0[m 修复后端任务执行 by cursor 3
+[33mbd78647[m 修复后端任务执行 by cursor 2
+[33mfe5c522[m 修复后端任务执行 by cursor
+[33m160883c[m fix 今日失败暂开日志 and 挂机加钟
+[33ma036401[m keep edit task same 2
+[33mc1f58d5[m keep edit task same
+[33ma4bc0dc[m fix task status
+[33mccdf4bf[m optimize today exc 3
+[33mef54844[m optimize today exc 2
+[33md62c339[m optimize today exc
+[33m6ad4edc[m fix edit monitor 2
+[33m1bf3f08[m optimize task daily and edit monitor
+[33mc7c4867[m optimize task daily
+[33m67161f7[m optimize monitor 0306 4
+[33m75a59de[m optimize monitor 0306 3
+[33m41d1ecc[m optimize monitor 0306 2
+[33m2cc9ef2[m optimize monitor 0306
+[33m316352d[m count task success 2
+[33md5f89b1[m count task success
+[33m7826745[m fix task load setting
+[33m59f50a9[m fix front task setting
+[33mde40415[m fix front task
+[33m39b62ae[m fix batch task
+[33mc134185[m optimize log show
+[33m0ff7d8f[m youhua show
+[33m38c257c[m fix clear log 3
+[33mf828e50[m fix clear log 2
+[33m04b14cd[m fix clear log
+[33ma37900f[m fix
+[33m46dc10b[m fix log
+[33mb3d8d81[m fix front
+[33m8362f31[m youhua monitor
+[33mbc0f8ef[m fix backend tasks
+[33m9c22c64[m fix monitor and sql
+[33mcb732e1[m add monitor 2
+[33m8f2da43[m add monitor
+[33m642cbaf[m fix api key 6
+[33m1465a05[m fix api key 5
+[33m99875f1[m fix api key 4
+[33md306416[m fix api key 3
+[33mc8a6d6e[m fix api key 2
+[33mdf31250[m fix api key
+[33mf85f9a0[m add ui api key
+[33m6b1eed8[m add api key and monitor
+[33m152101a[m fix backen task by cursor
+[33md2726fa[m add local deploy
+[33m02df296[m try to fix time task
+[33mf046864[m fix backend task
+[33m48537cb[m add backend task and local deploy
+[33mcd2b4b5[m task in backend
+[33m91a7f8d[m add man sort
+[33m7ad4a79[m fix sort show and store group
+[33mf84c179[m fix token sort
+[33m60c91c8[m add token sort
+[33m6d9c6a5[m add global_setting to database
+[33m939e274[m fix: 导入时按名称检查重复，防止刷新token后重复导入
+[33ma9f7dbf[m fix: 修复Token设置导入的ID映射问题
+[33m37276fa[m fix: 改进Token设置保存的错误处理
+[33mbc43e34[m fix: 修复导入配置文件的多个问题
+[33m12b5968[m fix: 修复清除Token和刷新Token不同步到后端的问题
+[33m0cad99a[m fix: 修复空状态页面不显示按钮的问题
+[33mc4601cb[m fix: 修复空状态页面显示问题，正确显示导入按钮
+[33mf387f19[m index add daoru
+[33meb31c29[m add daoru old peizhi
+[33m8839f20[m add daochu and delete
+[33mfa2d707[m add task in database
+[33m645c53e[m add task setting in database
+[33m1b93cef[m fix update task
+[33me7c644d[m fix token and task
+[33mc47a09a[m fix task store
+[33me3d6a3c[m fix tasks
+[33m38a2c54[m fix token read
+[33m8461b48[m fix env
+[33m8fff27c[m fix front api
+[33mc138836[m Add debug logs to apiService
+[33md62a0c3[m fix backend api
+[33m9c60f25[m db test
+[33mbdff96d[m Add db test
+[33m9c7a3d5[m Add environment variables
+[33m594d958[m fix supabase
+[33mf49bbb2[m fix logger
+[33m27247be[m 第一次

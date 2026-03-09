@@ -3566,25 +3566,54 @@ const importConfig = async ({ file }) => {
         const importData = JSON.parse(e.target.result);
 
         // Validate structure
-        if (!importData.version || !importData.tokens || !importData.scheduledTasks) {
+        if (!importData.version || !importData.tokens) {
           message.error("无效的配置文件格式");
           return;
         }
 
+        console.log(`导入配置文件版本: ${importData.version}`);
+
         let importedTokens = 0;
         let importedTasks = 0;
+        let skippedTokens = 0;
+
+        // ID 映射表：旧ID -> 新ID（用于更新分组中的tokenIds）
+        const tokenIdMap = new Map();
 
         // Import tokens
         if (Array.isArray(importData.tokens)) {
+          // 获取已存在的 token 信息
+          const existingTokenStrings = new Set(gameTokens.value.map((t) => t.token));
+          const existingTokenNames = new Map(gameTokens.value.map((t) => [t.name, t.id]));
+
           importData.tokens.forEach((token) => {
-            // Check if token already exists
-            const exists = gameTokens.value.some(
-              (t) => t.token === token.token || t.id === token.id
-            );
-            if (!exists && token.token) {
-              // Add new token directly to gameTokens (useLocalStorage)
+            const oldId = token.id;
+            
+            // Check if token already exists by token string
+            if (token.token && existingTokenStrings.has(token.token)) {
+              const existingToken = gameTokens.value.find((t) => t.token === token.token);
+              if (existingToken) {
+                tokenIdMap.set(oldId, existingToken.id);
+                console.log(`跳过已存在的Token（token相同）: ${token.name}, 映射: ${oldId} -> ${existingToken.id}`);
+                skippedTokens++;
+              }
+              return;
+            }
+
+            // Check if token already exists by name
+            if (token.name && existingTokenNames.has(token.name)) {
+              const existingId = existingTokenNames.get(token.name);
+              tokenIdMap.set(oldId, existingId);
+              console.log(`跳过已存在的Token（名称相同）: ${token.name}, 映射: ${oldId} -> ${existingId}`);
+              skippedTokens++;
+              return;
+            }
+
+            // Add new token
+            if (token.token) {
+              const newId = token.id || "token_" + Date.now() + Math.random().toString(36).slice(2);
               gameTokens.value.push({
-                id: token.id || "token_" + Date.now() + Math.random().toString(36).slice(2),
+                id: newId,
                 name: token.name || "",
                 token: token.token,
                 server: token.server || "",
@@ -3592,13 +3621,21 @@ const importConfig = async ({ file }) => {
                 remark: token.remark || "",
                 importMethod: "import",
                 sourceUrl: token.sourceUrl || null,
+                sortOrder: token.sortOrder,
                 upgradedToPermanent: true,
                 upgradedAt: token.upgradedAt || null,
                 updatedAt: token.updatedAt || new Date().toISOString(),
-                createdAt: new Date().toISOString(),
+                createdAt: token.createdAt || new Date().toISOString(),
                 lastUsed: new Date().toISOString(),
               });
+              tokenIdMap.set(oldId, newId);
               importedTokens++;
+              
+              // 更新已存在列表，防止后续重复导入
+              existingTokenStrings.add(token.token);
+              if (token.name) {
+                existingTokenNames.set(token.name, newId);
+              }
             }
           });
         }
@@ -3609,6 +3646,12 @@ const importConfig = async ({ file }) => {
             // Check if task already exists
             const exists = scheduledTasks.value.some((t) => t.id === task.id);
             if (!exists && task.id) {
+              // 更新 task 中的 selectedTokens 使用 ID 映射
+              if (task.selectedTokens && Array.isArray(task.selectedTokens)) {
+                task.selectedTokens = task.selectedTokens
+                  .map((oldId) => tokenIdMap.get(oldId) || oldId)
+                  .filter((id) => gameTokens.value.some((t) => t.id === id));
+              }
               scheduledTasks.value.push(task);
               importedTasks++;
             }
@@ -3622,45 +3665,96 @@ const importConfig = async ({ file }) => {
           saveBatchSettings();
         }
 
-        // Import token settings
+        // Import token settings (使用 ID 映射)
         if (Array.isArray(importData.tokenSettings)) {
           importData.tokenSettings.forEach(async (item) => {
             if (item.tokenId && item.settings) {
-              await apiService.saveTokenSettings(item.tokenId, item.settings, item.templateId);
+              const mappedTokenId = tokenIdMap.get(item.tokenId) || item.tokenId;
+              await apiService.saveTokenSettings(mappedTokenId, item.settings, item.templateId);
             }
           });
         }
 
         // Import task templates
+        let importedTemplates = 0;
         if (Array.isArray(importData.taskTemplates)) {
+          const existingTemplates = loadTaskTemplates();
+          const existingIds = new Set(existingTemplates.map(t => t.id));
+          
           importData.taskTemplates.forEach(async (template) => {
             if (template.name && template.settings) {
+              if (template.id && !existingIds.has(template.id)) {
+                existingTemplates.push(template);
+                importedTemplates++;
+              } else {
+                // Check by name if ID exists
+                const existsByName = existingTemplates.some(t => t.name === template.name);
+                if (!existsByName) {
+                  existingTemplates.push(template);
+                  importedTemplates++;
+                }
+              }
+              // 同时保存到后端
               await apiService.createTaskTemplate({
                 name: template.name,
                 settings: template.settings
               });
             }
           });
+          
+          localStorage.setItem("task-templates", JSON.stringify(existingTemplates));
+          taskTemplates.value = existingTemplates;
         }
 
         // Import token groups
+        let importedGroups = 0;
         if (Array.isArray(importData.tokenGroups)) {
+          const existingGroupNames = new Set(tokenGroups.value.map((g) => g.name));
+          
           importData.tokenGroups.forEach(async (group) => {
-            if (group.id && group.name) {
+            // 使用 ID 映射更新 tokenIds
+            const mappedTokenIds = group.tokenIds
+              .map((oldId) => tokenIdMap.get(oldId))
+              .filter((id) => id !== undefined && gameTokens.value.some((t) => t.id === id));
+
+            // 检查是否已存在同名分组
+            if (!existingGroupNames.has(group.name)) {
+              tokenGroups.value.push({
+                id: group.id || "group_" + Date.now() + Math.random().toString(36).slice(2),
+                name: group.name,
+                color: group.color || "#1677ff",
+                tokenIds: mappedTokenIds,
+                createdAt: group.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              });
+              importedGroups++;
+              
+              // 同时保存到后端
               await apiService.createTokenGroup({
                 id: group.id,
                 name: group.name,
                 color: group.color || '#1677ff',
-                token_ids: group.tokenIds || [],
+                token_ids: mappedTokenIds,
                 created_at: group.createdAt
               });
             }
           });
+          
+          // 保存分组到 localStorage
+          localStorage.setItem("tokenGroups", JSON.stringify(tokenGroups.value));
         }
 
-        message.success(
-          `导入成功: ${importedTokens} 个新账号, ${importedTasks} 个新定时任务`
-        );
+        let successMsg = `导入成功: ${importedTokens} 个新账号, ${importedTasks} 个新定时任务`;
+        if (importedTemplates > 0) {
+          successMsg += `, ${importedTemplates} 个新任务模板`;
+        }
+        if (importedGroups > 0) {
+          successMsg += `, ${importedGroups} 个分组`;
+        }
+        if (skippedTokens > 0) {
+          successMsg += ` (跳过 ${skippedTokens} 个重复账号)`;
+        }
+        message.success(successMsg);
       } catch (parseError) {
         console.error("Parse error:", parseError);
         message.error("解析配置文件失败");
