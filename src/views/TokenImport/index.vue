@@ -25,28 +25,17 @@
             <span>首页</span>
           </router-link>
           
-          <!-- 游戏功能 - 带分组下拉菜单 -->
-          <n-dropdown
-            :options="gameFeaturesMenuOptions"
-            @select="handleTokenSelect"
-            trigger="hover"
-            placement="bottom-start"
+          <!-- 游戏功能 -->
+          <router-link
+            to="/admin/game-features"
+            class="nav-item"
+            active-class="active"
           >
-            <router-link
-              to="/admin/game-features"
-              class="nav-item"
-              active-class="active"
-              @click.prevent
-            >
-              <n-icon>
-                <Cube />
-              </n-icon>
-              <span>游戏功能</span>
-              <n-icon size="small">
-                <ChevronDown />
-              </n-icon>
-            </router-link>
-          </n-dropdown>
+            <n-icon>
+              <Cube />
+            </n-icon>
+            <span>游戏功能</span>
+          </router-link>
           
           <router-link to="/tokens" class="nav-item" active-class="active">
             <n-icon>

@@ -31,7 +31,54 @@
             <PersonCircle />
           </n-icon>
           <h3>请选择Token</h3>
-          <p>点击右上角的头像下拉菜单选择要连接的Token</p>
+          <p>从下方列表选择要连接的Token</p>
+          
+          <!-- Token选择列表 -->
+          <div class="token-select-list">
+            <template v-if="sortedGroups.length === 0">
+              <div
+                v-for="token in gameTokens"
+                :key="token.id"
+                class="token-select-item"
+                @click="selectToken(token.id)"
+              >
+                <n-avatar
+                  :src="token.avatar || '/icons/xiaoyugan.png'"
+                  size="small"
+                  fallback-src="/icons/xiaoyugan.png"
+                />
+                <span class="token-name">{{ token.name }}</span>
+                <span v-if="token.server" class="token-server">[{{ token.server }}]</span>
+              </div>
+            </template>
+            <template v-else>
+              <div
+                v-for="group in sortedGroups"
+                :key="group.id"
+                class="token-group-section"
+              >
+                <div class="group-title">{{ group.name }}</div>
+                <div
+                  v-for="tokenId in group.tokenIds"
+                  :key="tokenId"
+                  class="token-select-item"
+                  @click="selectToken(tokenId)"
+                >
+                  <template v-if="getTokenById(tokenId)">
+                    <n-avatar
+                      :src="getTokenById(tokenId).avatar || '/icons/xiaoyugan.png'"
+                      size="small"
+                      fallback-src="/icons/xiaoyugan.png"
+                    />
+                    <span class="token-name">{{ getTokenById(tokenId).name }}</span>
+                    <span v-if="getTokenById(tokenId).server" class="token-server">[{{ getTokenById(tokenId).server }}]</span>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+          
+          <n-empty v-if="gameTokens.length === 0" description="暂无Token，请先导入" />
         </div>
       </div>
     </div>
@@ -91,7 +138,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useMessage } from "naive-ui";
-import { useTokenStore } from "@/stores/tokenStore";
+import { useTokenStore, gameTokens, tokenGroups } from "@/stores/tokenStore";
 import { CloudDone, PersonCircle } from "@vicons/ionicons5";
 
 const router = useRouter();
@@ -120,6 +167,29 @@ const connectionClass = computed(() => {
     ? "status-connected"
     : "status-disconnected";
 });
+
+// 排序后的分组列表
+const sortedGroups = computed(() => {
+  return [...tokenGroups.value].sort((a, b) => {
+    const orderA = a.sortOrder !== undefined ? a.sortOrder : 0;
+    const orderB = b.sortOrder !== undefined ? b.sortOrder : 0;
+    return orderA - orderB;
+  });
+});
+
+// 根据ID获取Token
+const getTokenById = (tokenId) => {
+  return gameTokens.value.find(t => t.id === tokenId);
+};
+
+// 选择Token
+const selectToken = (tokenId) => {
+  const token = gameTokens.value.find(t => t.id === tokenId);
+  if (token) {
+    tokenStore.selectToken(tokenId);
+    message.success(`已选择: ${token.name}`);
+  }
+};
 
 const isConnected = computed(() => {
   return connectionStatus.value === "connected";
@@ -466,6 +536,52 @@ onUnmounted(() => {
   p {
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-lg);
+  }
+}
+
+// Token选择列表
+.token-select-list {
+  margin-top: var(--spacing-lg);
+  text-align: left;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.token-group-section {
+  margin-bottom: var(--spacing-md);
+  
+  .group-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: var(--spacing-xs);
+  }
+}
+
+.token-select-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: var(--primary-color-light);
+  }
+  
+  .token-name {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+  }
+  
+  .token-server {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
   }
 }
 

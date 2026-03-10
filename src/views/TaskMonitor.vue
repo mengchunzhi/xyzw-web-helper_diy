@@ -210,7 +210,7 @@
         <!-- 卡片视图 -->
         <div v-else-if="viewMode === 'card'" class="tasks-grid">
           <div 
-            v-for="task in tasks" 
+            v-for="task in sortedTasks" 
             :key="task.id" 
             class="task-card"
             :class="{ 'is-active': task.is_active, 'is-paused': !task.is_active }"
@@ -905,6 +905,43 @@ const loadingExecutions = ref(false);
 const loadingMore = ref(false);
 
 const filterTaskId = ref(null);
+
+// 排序后的任务列表：活跃任务按下次执行时间排序，暂停任务排在后面
+const sortedTasks = computed(() => {
+  const now = Date.now();
+  
+  const tasksWithNextRun = tasks.value.map(task => {
+    let nextRun = null;
+    if (task.is_active && task.run_times && task.run_times.length > 0) {
+      const runTimes = task.run_times.map(t => {
+        const [hours, minutes] = t.split(':').map(Number);
+        const date = new Date();
+        date.setHours(hours, minutes, 0, 0);
+        if (date.getTime() < now) {
+          date.setDate(date.getDate() + 1);
+        }
+        return date.getTime();
+      });
+      nextRun = Math.min(...runTimes);
+    }
+    return { ...task, nextRunTime: nextRun };
+  });
+  
+  return tasksWithNextRun.sort((a, b) => {
+    // 活跃任务排在前面
+    if (a.is_active !== b.is_active) {
+      return a.is_active ? -1 : 1;
+    }
+    // 都是活跃任务，按下次执行时间排序
+    if (a.is_active && b.is_active) {
+      const aTime = a.nextRunTime || Infinity;
+      const bTime = b.nextRunTime || Infinity;
+      return aTime - bTime;
+    }
+    // 都是暂停任务，按名称排序
+    return (a.name || '').localeCompare(b.name || '');
+  });
+});
 const filterStatus = ref(null);
 const autoRefresh = ref(false);
 const expandedResults = ref({});
