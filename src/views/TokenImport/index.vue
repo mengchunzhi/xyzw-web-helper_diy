@@ -1048,6 +1048,8 @@ const openExpiryModal = (token) => {
       date = new Date(token.serviceExpiry);
     } else if (token.serviceExpiry instanceof Date) {
       date = token.serviceExpiry;
+    } else if (typeof token.serviceExpiry === 'number') {
+      date = new Date(token.serviceExpiry);
     } else {
       expiryForm.serviceExpiry = null;
       showExpiryModal.value = true;
@@ -1056,10 +1058,7 @@ const openExpiryModal = (token) => {
     if (isNaN(date.getTime())) {
       expiryForm.serviceExpiry = null;
     } else {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      expiryForm.serviceExpiry = `${year}-${month}-${day}`;
+      expiryForm.serviceExpiry = date.getTime();
     }
   } else {
     expiryForm.serviceExpiry = null;
@@ -1072,8 +1071,11 @@ const saveExpiry = async () => {
   
   let expiryDate = null;
   if (expiryForm.serviceExpiry) {
-    const [year, month, day] = expiryForm.serviceExpiry.split('-').map(Number);
-    expiryDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59)).toISOString();
+    const date = new Date(expiryForm.serviceExpiry);
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    expiryDate = new Date(Date.UTC(year, month, day, 23, 59, 59)).toISOString();
   }
   
   await tokenStore.updateToken(editingExpiryToken.value.id, {
