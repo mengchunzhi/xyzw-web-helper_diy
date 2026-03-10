@@ -66,6 +66,7 @@ import {
   TrendingUp,
   Add,
   Cloud,
+  TimerOutline,
 } from "@vicons/ionicons5";
 
 const router = useRouter();
@@ -109,6 +110,13 @@ const quickActions = ref([
   },
   {
     id: 4,
+    icon: TimerOutline,
+    title: "任务监控",
+    description: "查看定时任务执行状态",
+    action: "task-monitor",
+  },
+  {
+    id: 5,
     icon: Cloud,
     title: "WebSocket测试",
     description: "测试WebSocket连接和游戏命令",
@@ -152,6 +160,9 @@ const handleQuickAction = (action) => {
       break;
     case "batch-daily-tasks":
       router.push("/admin/batch-daily-tasks");
+      break;
+    case "task-monitor":
+      router.push("/admin/task-monitor");
       break;
   }
 };

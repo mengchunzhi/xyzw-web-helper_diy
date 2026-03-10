@@ -7,7 +7,7 @@
           <div class="header-left">
             <h1 class="page-title">游戏功能</h1>
             <p class="page-subtitle">
-              {{ tokenStore.selectedToken?.name || "未选择Token" }}
+              {{ tokenStore.selectedToken?.name || "请选择Token" }}
             </p>
           </div>
 
@@ -23,18 +23,42 @@
       </div>
     </div>
 
+    <!-- 未选择Token提示 -->
+    <div v-if="!tokenStore.selectedToken" class="no-token-section">
+      <div class="container">
+        <div class="no-token-card">
+          <n-icon size="48" color="#999">
+            <PersonCircle />
+          </n-icon>
+          <h3>请选择Token</h3>
+          <p>点击右上角的头像下拉菜单选择要连接的Token</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 已选择Token但未连接 -->
+    <div v-else-if="!isConnected" class="connecting-section">
+      <div class="container">
+        <div class="connecting-card">
+          <n-spin size="large" />
+          <h3>正在连接...</h3>
+          <p>{{ tokenStore.selectedToken.name }}</p>
+        </div>
+      </div>
+    </div>
+
     <!-- 反馈提示区域 -->
-    <div v-if="showFeedback" class="feedback-section" />
+    <div v-if="showFeedback && isConnected" class="feedback-section" />
 
     <!-- 功能模块网格 -->
-    <div class="features-grid-section">
+    <div v-if="isConnected" class="features-grid-section">
       <div class="container">
         <GameStatus />
       </div>
     </div>
 
     <!-- WebSocket 连接状态 -->
-    <div class="ws-status-section">
+    <div v-if="tokenStore.selectedToken" class="ws-status-section">
       <div class="container">
         <div class="ws-status-card">
           <div class="status-header">
@@ -48,7 +72,7 @@
               <span>WebSocket状态:</span>
               <span :class="connectionClass">{{ connectionStatusText }}</span>
             </div>
-            <div v-if="tokenStore.selectedToken" class="status-item">
+            <div class="status-item">
               <span>当前Token:</span>
               <span>{{ tokenStore.selectedToken.name }}</span>
             </div>
@@ -68,7 +92,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useMessage } from "naive-ui";
 import { useTokenStore } from "@/stores/tokenStore";
-import { CloudDone } from "@vicons/ionicons5";
+import { CloudDone, PersonCircle } from "@vicons/ionicons5";
 
 const router = useRouter();
 const message = useMessage();
@@ -118,7 +142,6 @@ const pickArenaTargetId = (targets) => {
 const handleFeatureAction = async (featureType) => {
   if (!tokenStore.selectedToken) {
     message.warning("请先选择Token");
-    router.push("/tokens");
     return;
   }
 
@@ -188,8 +211,6 @@ const handleFeatureAction = async (featureType) => {
     },
     "tower-challenge": () => {
       message.info("开始爬塔挑战...");
-      // 关键业务：只提示 UI，不打印冗余日志
-      // 实际请求体: {"ack":0,"body":{},"cmd":"fight_starttower","seq":XX,"time":TIMESTAMP}
       tokenStore.sendMessage(tokenId, "fight_starttower");
     },
   };
@@ -202,12 +223,9 @@ const handleFeatureAction = async (featureType) => {
   }
 };
 
-// 已移除 sendWebSocketMessage，使用 tokenStore.sendMessage 代替
-
 const connectWebSocket = () => {
   if (!tokenStore.selectedToken) {
     message.warning("请先选择一个Token");
-    router.push("/tokens");
     return;
   }
 
@@ -215,16 +233,13 @@ const connectWebSocket = () => {
     const tokenId = tokenStore.selectedToken.id;
     const token = tokenStore.selectedToken.token;
 
-    // 使用 tokenStore 的 WebSocket 连接管理
     tokenStore.createWebSocketConnection(tokenId, token);
     message.info("正在建立 WebSocket 连接...");
 
-    // 等待连接建立
     setTimeout(async () => {
       const status = tokenStore.getWebSocketStatus(tokenId);
       if (status === "connected") {
         message.success("WebSocket 连接成功");
-        // 连接成功后自动初始化游戏数据
         await initializeGameData();
       }
     }, 2000);
@@ -250,23 +265,22 @@ const toggleConnection = () => {
   }
 };
 
-// handleWebSocketMessage 已移除，消息处理由 tokenStore 负责
-
-// 生命周期
-onMounted(() => {
-  // 检查是否需要连接 WebSocket
-  if (tokenStore.selectedToken) {
-    const status = tokenStore.getWebSocketStatus(tokenStore.selectedToken.id);
-    if (status !== "connected") {
-      connectWebSocket();
-    } else {
-      // 如果已连接，立即获取初始数据
-      initializeGameData();
+// 监听选中Token变化，自动连接
+watch(
+  () => tokenStore.selectedToken,
+  (newToken, oldToken) => {
+    if (newToken && newToken.id !== oldToken?.id) {
+      const status = tokenStore.getWebSocketStatus(newToken.id);
+      if (status !== "connected") {
+        connectWebSocket();
+      } else {
+        initializeGameData();
+      }
     }
-  }
-});
+  },
+);
 
-// 监听当前选中 Token 的连接错误（如 token 过期）并给出明确提示
+// 监听当前选中 Token 的连接错误
 watch(
   () => {
     if (!tokenStore.selectedToken)
@@ -302,7 +316,6 @@ const initializeGameData = async () => {
 
   try {
     const tokenId = tokenStore.selectedToken.id;
-    // 获取初始化数据（静默）
     tokenStore.sendMessage(tokenId, "role_getroleinfo");
     tokenStore.sendMessage(tokenId, "tower_getinfo");
     tokenStore.sendMessage(tokenId, "evotower_getinfo");
@@ -316,6 +329,10 @@ const initializeGameData = async () => {
     // 静默处理初始化异常
   }
 };
+
+onMounted(() => {
+  // 不自动连接，等待用户选择Token
+});
 
 onUnmounted(() => {
   // WebSocket 连接由 tokenStore 管理，不需要手动清理
@@ -426,6 +443,54 @@ onUnmounted(() => {
 // 反馈提示区域
 .feedback-section {
   padding: var(--spacing-md) 0;
+}
+
+// 未选择Token提示
+.no-token-section {
+  padding: var(--spacing-2xl) 0;
+}
+
+.no-token-card {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-xl);
+  padding: var(--spacing-2xl);
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  h3 {
+    margin: var(--spacing-md) 0 var(--spacing-sm);
+    color: var(--text-primary);
+    font-size: var(--font-size-lg);
+  }
+
+  p {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+  }
+}
+
+// 连接中提示
+.connecting-section {
+  padding: var(--spacing-2xl) 0;
+}
+
+.connecting-card {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-xl);
+  padding: var(--spacing-2xl);
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  h3 {
+    margin: var(--spacing-md) 0 var(--spacing-sm);
+    color: var(--text-primary);
+    font-size: var(--font-size-lg);
+  }
+
+  p {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+  }
 }
 
 // 功能模块网格

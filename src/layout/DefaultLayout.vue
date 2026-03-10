@@ -25,28 +25,18 @@
             <span>首页</span>
           </router-link>
           
-          <!-- 游戏功能 - 带分组下拉菜单 -->
-          <n-dropdown
-            :options="gameFeaturesMenuOptions"
-            @select="handleTokenSelect"
-            trigger="click"
-            placement="bottom-start"
+          <!-- 游戏功能 -->
+          <router-link
+            to="/admin/game-features"
+            class="nav-item"
+            active-class="active"
+            @click="clearSelectedToken"
           >
-            <router-link
-              to="/admin/game-features"
-              class="nav-item"
-              :class="{ active: isGameFeaturesPage }"
-              @click.prevent
-            >
-              <n-icon>
-                <Cube />
-              </n-icon>
-              <span>游戏功能</span>
-              <n-icon size="small">
-                <ChevronDown />
-              </n-icon>
-            </router-link>
-          </n-dropdown>
+            <n-icon>
+              <Cube />
+            </n-icon>
+            <span>游戏功能</span>
+          </router-link>
           
           <router-link to="/tokens" class="nav-item" active-class="active">
             <n-icon>
@@ -97,7 +87,7 @@
           <ThemeToggle />
 
           <!-- 游戏功能页面显示token选择器 -->
-          <n-dropdown v-if="isGameFeaturesPage" :options="userMenuOptions" @select="handleUserAction">
+          <n-dropdown v-if="isGameFeaturesPage" :options="tokenMenuOptions" @select="handleTokenSelectFromDropdown" trigger="click" placement="bottom-end">
             <div class="user-info">
               <n-avatar
                 :src="selectedToken?.avatar || '/icons/xiaoyugan.png'"
@@ -105,7 +95,7 @@
                 fallback-src="/icons/xiaoyugan.png"
               />
               <span class="username">{{
-                selectedToken?.name || "未选择Token"
+                selectedToken?.name || "选择Token"
               }}</span>
               <n-icon>
                 <ChevronDown />
@@ -261,7 +251,7 @@ const userMenuOptions = [
   },
 ];
 
-const gameFeaturesMenuOptions = computed(() => {
+const tokenMenuOptions = computed(() => {
   const groups = tokenGroups.value || [];
   const tokens = gameTokens.value || [];
   
@@ -307,32 +297,26 @@ const gameFeaturesMenuOptions = computed(() => {
     };
   }).filter(Boolean);
 });
+// 方法
+const clearSelectedToken = () => {
+  selectedTokenId.value = '';
+};
 
-const handleTokenSelect = (key) => {
-  console.log('handleTokenSelect called with key:', key);
-  
+const handleTokenSelectFromDropdown = (key) => {
   // key 格式: groupId_tokenId 或 tokenId
   // 如果 key 只有两个部分且第一部分是 'group'，说明是点击了分组标题，跳过
   const parts = key.split('_');
   if (parts.length === 2 && parts[0] === 'group') {
-    console.log('Skipping group header click');
     return;
   }
   
   const lastUnderscoreIndex = key.lastIndexOf('_');
   const tokenId = lastUnderscoreIndex === -1 ? key : key.slice(lastUnderscoreIndex + 1);
   
-  console.log('Parsed tokenId:', tokenId);
-  
   const token = gameTokens.value.find(t => t.id === tokenId);
-  console.log('Found token:', token);
-  
   if (token) {
     tokenStore.selectToken(tokenId);
-    message.success(`已切换到: ${token.name}`);
-    router.push('/admin/game-features');
-  } else {
-    console.log('Token not found, available tokens:', gameTokens.value.map(t => t.id));
+    message.success(`已连接: ${token.name}`);
   }
 };
 
