@@ -311,7 +311,10 @@ const gameFeaturesMenuOptions = computed(() => {
 const handleTokenSelect = (key) => {
   if (key.startsWith('group_')) return;
   
-  const tokenId = key.includes('_') ? key.split('_').pop() : key;
+  // key 格式: group_abc123_tokenId 或 tokenId
+  const parts = key.split('_');
+  const tokenId = parts.length > 1 ? parts[parts.length - 1] : key;
+  
   const token = gameTokens.value.find(t => t.id === tokenId);
   if (token) {
     tokenStore.selectToken(tokenId);
