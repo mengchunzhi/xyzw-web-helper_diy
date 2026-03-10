@@ -57,22 +57,20 @@
               <template v-for="group in sortedGroups" :key="group.id">
                 <div class="group-header">{{ group.name }}</div>
                 <div
-                  v-for="tokenId in group.tokenIds"
+                  v-for="tokenId in getValidTokenIds(group.tokenIds)"
                   :key="tokenId"
                   class="token-card"
                   @click="selectToken(tokenId)"
                 >
-                  <template v-if="getTokenById(tokenId)">
-                    <n-avatar
-                      :src="getTokenById(tokenId).avatar || '/icons/xiaoyugan.png'"
-                      size="small"
-                      fallback-src="/icons/xiaoyugan.png"
-                    />
-                    <div class="token-info">
-                      <span class="token-name">{{ getTokenById(tokenId).name }}</span>
-                      <span v-if="getTokenById(tokenId).server" class="token-server">{{ getTokenById(tokenId).server }}</span>
-                    </div>
-                  </template>
+                  <n-avatar
+                    :src="getTokenById(tokenId).avatar || '/icons/xiaoyugan.png'"
+                    size="small"
+                    fallback-src="/icons/xiaoyugan.png"
+                  />
+                  <div class="token-info">
+                    <span class="token-name">{{ getTokenById(tokenId).name }}</span>
+                    <span v-if="getTokenById(tokenId).server" class="token-server">{{ getTokenById(tokenId).server }}</span>
+                  </div>
                 </div>
               </template>
             </template>
@@ -180,6 +178,12 @@ const sortedGroups = computed(() => {
 // 根据ID获取Token
 const getTokenById = (tokenId) => {
   return gameTokens.value.find(t => t.id === tokenId);
+};
+
+// 获取分组中有效的tokenId列表
+const getValidTokenIds = (tokenIds) => {
+  if (!tokenIds || !Array.isArray(tokenIds)) return [];
+  return tokenIds.filter(id => getTokenById(id));
 };
 
 // 选择Token
