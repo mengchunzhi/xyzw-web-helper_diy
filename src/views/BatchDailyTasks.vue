@@ -4308,6 +4308,13 @@ const pageLoadTime = Date.now();
 
 // Health check for the scheduler
 const healthCheck = () => {
+  // Skip scheduler health check if backend is available
+  // as backend handles scheduled tasks via node-cron
+  const useBackend = apiService.shouldUseBackend();
+  if (useBackend) {
+    return;
+  }
+
   // If interval is not running, restart it
   if (!intervalId.value) {
     console.error(
@@ -4352,6 +4359,18 @@ const startScheduler = () => {
   // Clear any existing interval first
   if (intervalId.value) {
     clearInterval(intervalId.value);
+  }
+
+  // Check if backend is available - if so, skip frontend task scheduling
+  // as backend handles scheduled tasks via node-cron
+  const useBackend = apiService.shouldUseBackend();
+  if (useBackend) {
+    addLog({
+      time: new Date().toLocaleTimeString(),
+      message: "=== 后端服务已启用，前端定时任务调度已跳过（由后端统一调度） ===",
+      type: "info",
+    });
+    return;
   }
 
   // Check every 10 seconds instead of 60 seconds for more timely task execution
@@ -4481,12 +4500,22 @@ onBeforeUnmount(() => {
 
 // Task scheduler - ensure it runs properly
 const scheduleTaskExecution = () => {
-  // Log the start of the scheduler
-  addLog({
-    time: new Date().toLocaleTimeString(),
-    message: "=== 定时任务调度服务已启动 ===",
-    type: "info",
-  });
+  // Check if backend is available
+  const useBackend = apiService.shouldUseBackend();
+  
+  if (useBackend) {
+    addLog({
+      time: new Date().toLocaleTimeString(),
+      message: "=== 后端服务已启用，定时任务由后端统一调度 ===",
+      type: "info",
+    });
+  } else {
+    addLog({
+      time: new Date().toLocaleTimeString(),
+      message: "=== 定时任务调度服务已启动 ===",
+      type: "info",
+    });
+  }
 
   // Start the scheduler
   startScheduler();
