@@ -29,7 +29,7 @@
           <n-dropdown
             :options="gameFeaturesMenuOptions"
             @select="handleTokenSelect"
-            trigger="hover"
+            trigger="click"
             placement="bottom-start"
           >
             <router-link
@@ -302,7 +302,7 @@ const gameFeaturesMenuOptions = computed(() => {
           h('span', token.name),
           token.server ? h(NText, { depth: 3, style: { fontSize: '12px' } }, () => `[${token.server}]`) : null
         ]),
-        key: token.id,
+        key: `${group.id}_${token.id}`,
       }))
     };
   }).filter(Boolean);
@@ -311,9 +311,10 @@ const gameFeaturesMenuOptions = computed(() => {
 const handleTokenSelect = (key) => {
   if (key.startsWith('group_')) return;
   
-  const token = gameTokens.value.find(t => t.id === key);
+  const tokenId = key.includes('_') ? key.split('_').pop() : key;
+  const token = gameTokens.value.find(t => t.id === tokenId);
   if (token) {
-    tokenStore.selectToken(key);
+    tokenStore.selectToken(tokenId);
     message.success(`已切换到: ${token.name}`);
     router.push('/admin/game-features');
   }
