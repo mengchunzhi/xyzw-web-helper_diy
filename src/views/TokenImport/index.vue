@@ -1,18 +1,39 @@
 <template>
   <div class="token-import-page">
-    <div class="container">
-      <!-- 页面头部 -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-top">
-            <img src="/icons/xiaoyugan.png" alt="XYZW" class="brand-logo" />
-            <!-- 主题切换按钮 -->
-            <ThemeToggle />
-          </div>
-          <h1>游戏Token管理</h1>
+    <!-- 顶部导航栏 -->
+    <nav class="token-nav">
+      <div class="nav-container">
+        <div class="nav-brand">
+          <img src="/icons/xiaoyugan.png" alt="XYZW" class="brand-logo" />
+          <span class="brand-text">XYZW 控制台</span>
+        </div>
+
+        <div class="nav-menu">
+          <router-link to="/admin/dashboard" class="nav-item">
+            <n-icon><Home /></n-icon>
+            <span>首页</span>
+          </router-link>
+          <router-link to="/tokens" class="nav-item active">
+            <n-icon><PersonCircle /></n-icon>
+            <span>Token管理</span>
+          </router-link>
+          <router-link to="/admin/batch-daily-tasks" class="nav-item">
+            <n-icon><Layers /></n-icon>
+            <span>批量日常</span>
+          </router-link>
+          <router-link to="/admin/task-monitor" class="nav-item">
+            <n-icon><TimeOutline /></n-icon>
+            <span>任务监控</span>
+          </router-link>
+        </div>
+
+        <div class="nav-user">
+          <ThemeToggle />
         </div>
       </div>
+    </nav>
 
+    <div class="container">
       <!-- Token导入区域 -->
       <a-modal
         class="token-import-modal"
@@ -296,6 +317,32 @@
                   </n-tag>
                 </div>
 
+                <!-- 服务到期时间（仅对付费token显示） -->
+                <div v-if="isPaidToken(token.id)" class="service-expiry-info">
+                  <div class="expiry-item">
+                    <span class="expiry-label">
+                      <n-icon><Calendar /></n-icon>
+                      服务期限：
+                    </span>
+                    <n-tag
+                      size="small"
+                      :type="getExpiryStatus(token).color"
+                      @click.stop="openExpiryModal(token)"
+                      style="cursor: pointer"
+                    >
+                      {{ getExpiryStatus(token).text }}
+                    </n-tag>
+                    <n-button
+                      size="tiny"
+                      text
+                      type="primary"
+                      @click.stop="openExpiryModal(token)"
+                    >
+                      设置
+                    </n-button>
+                  </div>
+                </div>
+
                 <!-- 升级选项（仅对临时存储的token显示） -->
                 <div
                   v-if="
@@ -454,6 +501,20 @@
 
               <!-- Actions -->
               <n-space>
+                <!-- 服务到期时间（仅对付费token显示） -->
+                <n-tag
+                  v-if="isPaidToken(token.id)"
+                  size="small"
+                  :type="getExpiryStatus(token).color"
+                  @click.stop="openExpiryModal(token)"
+                  style="cursor: pointer"
+                >
+                  <template #icon>
+                    <n-icon><Calendar /></n-icon>
+                  </template>
+                  {{ getExpiryStatus(token).text }}
+                </n-tag>
+
                 <!-- 存储类型 -->
                 <n-tag
                   size="small"
@@ -624,6 +685,43 @@
         </div>
       </template>
     </n-modal>
+
+    <!-- 服务到期时间设置模态框 -->
+    <n-modal
+      v-model:show="showExpiryModal"
+      preset="card"
+      title="设置服务到期时间"
+      style="width: 400px"
+    >
+      <div v-if="editingExpiryToken" style="margin-bottom: 16px">
+        <n-text>账号：</n-text>
+        <n-text strong>{{ editingExpiryToken.name }}</n-text>
+      </div>
+      
+      <n-form label-placement="left" label-width="100px">
+        <n-form-item label="到期日期">
+          <n-date-picker
+            v-model:value="expiryForm.serviceExpiry"
+            type="date"
+            clearable
+            placeholder="选择服务到期日期"
+            style="width: 100%"
+          />
+        </n-form-item>
+        <n-form-item label="当前状态">
+          <n-text v-if="editingExpiryToken" :type="getExpiryStatus(editingExpiryToken).color === 'error' ? 'error' : getExpiryStatus(editingExpiryToken).color === 'warning' ? 'warning' : 'default'">
+            {{ getExpiryStatus(editingExpiryToken).text }}
+          </n-text>
+        </n-form-item>
+      </n-form>
+
+      <template #footer>
+        <div class="modal-actions">
+          <n-button @click="showExpiryModal = false"> 取消 </n-button>
+          <n-button type="primary" @click="saveExpiry"> 保存 </n-button>
+        </div>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -634,7 +732,7 @@ import BinTokenForm from "./bin.vue";
 import singleBinTokenForm from "./singlebin.vue";
 import WxQrcodeForm from "./wxqrcode.vue";
 
-import { useTokenStore, selectedTokenId } from "@/stores/tokenStore";
+import { useTokenStore, selectedTokenId, tokenGroups } from "@/stores/tokenStore";
 import {
   Add,
   Copy,
@@ -650,13 +748,19 @@ import {
   SyncCircle,
   TrashBin,
   CloudUpload,
+  PersonCircle,
+  Layers,
+  TimeOutline,
+  Calendar,
+  Time,
 } from "@vicons/ionicons5";
 import { NIcon, useDialog, useMessage } from "naive-ui";
 import apiService from "@/services/apiService";
-import { h, onMounted, reactive, ref, watch } from "vue";
+import { computed, h, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { transformToken } from "@/utils/token";
 import useIndexedDB from "@/hooks/useIndexedDB";
+import ThemeToggle from "@/components/Common/ThemeToggle.vue";
 const { getArrayBuffer, storeArrayBuffer, deleteArrayBuffer, clearAll } = useIndexedDB();
 // 接收路由参数
 const props = defineProps({
@@ -691,6 +795,74 @@ const dragIndex = ref(null);
 // 备注编辑状态管理
 const editingRemark = ref(null); // 当前正在编辑备注的tokenId
 const tempRemarks = ref({}); // 临时保存编辑中的备注内容
+
+// 服务到期时间管理
+const showExpiryModal = ref(false);
+const editingExpiryToken = ref(null);
+const expiryForm = reactive({
+  serviceExpiry: null,
+});
+
+// 付费分组相关
+const paidGroupName = "付费";
+const paidGroup = computed(() => {
+  return tokenGroups.value.find((g) => g.name === paidGroupName);
+});
+
+const paidTokenIds = computed(() => {
+  return paidGroup.value?.tokenIds || [];
+});
+
+const paidTokens = computed(() => {
+  return tokenStore.gameTokens.filter((token) =>
+    paidTokenIds.value.includes(token.id)
+  );
+});
+
+const isPaidToken = (tokenId) => {
+  return paidTokenIds.value.includes(tokenId);
+};
+
+const getDaysRemaining = (expiryDate) => {
+  if (!expiryDate) return null;
+  const expiry = new Date(expiryDate);
+  const now = new Date();
+  const diffTime = expiry.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+const getExpiryStatus = (token) => {
+  if (!token.serviceExpiry) return { status: "none", text: "未设置", color: "default" };
+  const days = getDaysRemaining(token.serviceExpiry);
+  if (days === null) return { status: "none", text: "未设置", color: "default" };
+  if (days < 0) return { status: "expired", text: `已过期 ${Math.abs(days)} 天`, color: "error" };
+  if (days === 0) return { status: "today", text: "今天到期", color: "warning" };
+  if (days <= 7) return { status: "soon", text: `剩余 ${days} 天`, color: "warning" };
+  return { status: "active", text: `剩余 ${days} 天`, color: "success" };
+};
+
+const openExpiryModal = (token) => {
+  editingExpiryToken.value = token;
+  expiryForm.serviceExpiry = token.serviceExpiry ? token.serviceExpiry.split("T")[0] : null;
+  showExpiryModal.value = true;
+};
+
+const saveExpiry = async () => {
+  if (!editingExpiryToken.value) return;
+  
+  const expiryDate = expiryForm.serviceExpiry 
+    ? new Date(expiryForm.serviceExpiry).toISOString() 
+    : null;
+  
+  await tokenStore.updateToken(editingExpiryToken.value.id, {
+    serviceExpiry: expiryDate,
+  });
+  
+  message.success("服务到期时间已更新");
+  showExpiryModal.value = false;
+  editingExpiryToken.value = null;
+};
 
 // 监听视图模式变化，保存到localStorage
 watch(viewMode, (newViewMode) => {
@@ -1929,76 +2101,119 @@ onMounted(async () => {
 <style scoped lang="scss">
 .token-import-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: var(--spacing-xl) 0;
+  background: var(--bg-secondary);
+  padding: 0;
 }
 
 /* 深色主题下的页面背景 */
 [data-theme="dark"] .token-import-page {
-  background: linear-gradient(135deg, #0f172a 0%, #1f2937 100%);
+  background: var(--bg-secondary);
+}
+
+// 导航栏样式
+.token-nav {
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-light);
+  padding: 0 var(--spacing-lg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+
+  .brand-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--border-radius-small);
+  }
+
+  .brand-text {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+}
+
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius-medium);
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    &.active {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    span {
+      font-size: var(--font-size-sm);
+    }
+  }
+}
+
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
 }
 
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 var(--spacing-lg);
-}
-
-.page-header {
-  text-align: center;
-  margin-bottom: var(--spacing-2xl);
-}
-
-.header-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-md);
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.header-top {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  position: relative;
-  width: 100%;
-  justify-content: center;
-}
-
-.theme-toggle {
-  position: absolute;
-  right: 0;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.brand-logo {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--border-radius-medium);
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-}
-
-.header-content h1 {
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-bold);
-  margin: 0;
-  color: #ffffff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-}
-
-.header-content p {
-  font-size: var(--font-size-lg);
-  margin: 0;
-  color: rgba(255, 255, 255, 0.95);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  padding: var(--spacing-xl) var(--spacing-lg);
 }
 
 .import-section {
   margin-bottom: var(--spacing-2xl);
+}
+
+// 服务到期时间样式
+.service-expiry-info {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px dashed var(--border-light);
+
+  .expiry-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+  }
+
+  .expiry-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+  }
 }
 
 .import-card {

@@ -28,6 +28,7 @@ declare interface TokenData {
   upgradedAt?: string; // 升级时间
   updatedAt?: string; // 更新时间
   sortOrder?: number; // 排序顺序
+  serviceExpiry?: string; // 服务到期时间（ISO格式日期字符串）
 }
 
 declare interface WebSocketConnection {
