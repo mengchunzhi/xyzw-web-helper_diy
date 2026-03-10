@@ -33,48 +33,48 @@
           <h3>请选择Token</h3>
           <p>从下方列表选择要连接的Token</p>
           
-          <!-- Token选择列表 -->
-          <div class="token-select-list">
+          <!-- Token选择列表 - 紧凑网格布局 -->
+          <div class="token-select-grid">
             <template v-if="sortedGroups.length === 0">
               <div
                 v-for="token in gameTokens"
                 :key="token.id"
-                class="token-select-item"
+                class="token-card"
                 @click="selectToken(token.id)"
               >
                 <n-avatar
                   :src="token.avatar || '/icons/xiaoyugan.png'"
-                  size="small"
+                  size="medium"
                   fallback-src="/icons/xiaoyugan.png"
                 />
-                <span class="token-name">{{ token.name }}</span>
-                <span v-if="token.server" class="token-server">[{{ token.server }}]</span>
+                <div class="token-info">
+                  <span class="token-name">{{ token.name }}</span>
+                  <span v-if="token.server" class="token-server">{{ token.server }}</span>
+                </div>
               </div>
             </template>
             <template v-else>
-              <div
-                v-for="group in sortedGroups"
-                :key="group.id"
-                class="token-group-section"
-              >
-                <div class="group-title">{{ group.name }}</div>
+              <template v-for="group in sortedGroups" :key="group.id">
+                <div class="group-header">{{ group.name }}</div>
                 <div
                   v-for="tokenId in group.tokenIds"
                   :key="tokenId"
-                  class="token-select-item"
+                  class="token-card"
                   @click="selectToken(tokenId)"
                 >
                   <template v-if="getTokenById(tokenId)">
                     <n-avatar
                       :src="getTokenById(tokenId).avatar || '/icons/xiaoyugan.png'"
-                      size="small"
+                      size="medium"
                       fallback-src="/icons/xiaoyugan.png"
                     />
-                    <span class="token-name">{{ getTokenById(tokenId).name }}</span>
-                    <span v-if="getTokenById(tokenId).server" class="token-server">[{{ getTokenById(tokenId).server }}]</span>
+                    <div class="token-info">
+                      <span class="token-name">{{ getTokenById(tokenId).name }}</span>
+                      <span v-if="getTokenById(tokenId).server" class="token-server">{{ getTokenById(tokenId).server }}</span>
+                    </div>
                   </template>
                 </div>
-              </div>
+              </template>
             </template>
           </div>
           
@@ -540,43 +540,65 @@ onUnmounted(() => {
   }
 }
 
-// Token选择列表
-.token-select-list {
+// Token选择网格
+.token-select-grid {
   margin-top: var(--spacing-lg);
-  text-align: left;
-  max-height: 400px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--spacing-sm);
+  max-height: 500px;
   overflow-y: auto;
+  padding: var(--spacing-sm);
 }
 
-.token-group-section {
-  margin-bottom: var(--spacing-md);
+.group-header {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  padding: var(--spacing-xs) 0;
+  margin-top: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-light);
   
-  .group-title {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--text-secondary);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-bottom: 1px solid var(--border-light);
-    margin-bottom: var(--spacing-xs);
+  &:first-child {
+    margin-top: 0;
   }
 }
 
-.token-select-item {
+.token-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
   border-radius: var(--border-radius-medium);
   cursor: pointer;
   transition: all 0.2s ease;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   
   &:hover {
     background: var(--primary-color-light);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+  }
+  
+  .token-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-align: center;
   }
   
   .token-name {
     font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
     color: var(--text-primary);
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   
   .token-server {

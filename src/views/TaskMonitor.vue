@@ -296,7 +296,7 @@
         <div v-else-if="viewMode === 'list'" class="tasks-list">
           <n-data-table
             :columns="taskColumns"
-            :data="tasks"
+            :data="sortedTasks"
             :row-key="row => row.id"
             :row-class-name="row => row.is_active ? 'row-active' : 'row-paused'"
           />

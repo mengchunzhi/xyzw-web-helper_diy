@@ -87,7 +87,14 @@
           <ThemeToggle />
 
           <!-- 游戏功能页面显示token选择器 -->
-          <n-dropdown v-if="isGameFeaturesPage" :options="tokenMenuOptions" @select="handleTokenSelectFromDropdown" trigger="click" placement="bottom-end">
+          <n-dropdown 
+            v-if="isGameFeaturesPage" 
+            :options="tokenMenuOptions" 
+            @select="handleTokenSelectFromDropdown" 
+            trigger="click" 
+            placement="bottom-end"
+            :style="{ minWidth: '200px' }"
+          >
             <div class="user-info">
               <n-avatar
                 :src="selectedToken?.avatar || '/icons/xiaoyugan.png'"
