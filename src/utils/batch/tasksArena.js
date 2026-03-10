@@ -180,11 +180,6 @@ export function createTasksArena(deps) {
         await new Promise((r) => setTimeout(r, delayConfig.battle));
         
         // 尝试领取通行证奖励
-        addLog({
-          time: new Date().toLocaleTimeString(),
-          message: `${token.name} 正在尝试领取通行证奖励...`,
-          type: "info",
-        });
         try {
           const passResult = await tokenStore.sendMessageWithPromise(
             tokenId,
@@ -192,10 +187,14 @@ export function createTasksArena(deps) {
             { actId: 1 },
             5000,
           );
-          if (passResult && passResult.errcode === 0) {
+          if (passResult && passResult.reward && passResult.reward.length > 0) {
+            const rewardInfo = passResult.reward.map(r => {
+              const itemNames = { 1003: '金币', 1007: '咸神门票' };
+              return `${itemNames[r.itemId] || '道具'} x${r.value}`;
+            }).join(', ');
             addLog({
               time: new Date().toLocaleTimeString(),
-              message: `${token.name} 领取通行证奖励成功`,
+              message: `${token.name} 领取通行证奖励: ${rewardInfo}`,
               type: "success",
             });
           } else if (passResult && passResult.errcode === 1001) {
@@ -204,17 +203,17 @@ export function createTasksArena(deps) {
               message: `${token.name} 暂无可领取的通行证奖励`,
               type: "info",
             });
-          } else {
+          } else if (passResult) {
             addLog({
               time: new Date().toLocaleTimeString(),
-              message: `${token.name} 领取通行证奖励: ${JSON.stringify(passResult)}`,
+              message: `${token.name} 通行证奖励已领取`,
               type: "info",
             });
           }
         } catch (passErr) {
           addLog({
             time: new Date().toLocaleTimeString(),
-            message: `${token.name} 领取通行证奖励失败: ${passErr.message || "未知错误"}`,
+            message: `${token.name} 领取通行证奖励失败`,
             type: "warning",
           });
         }
