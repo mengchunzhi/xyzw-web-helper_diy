@@ -725,6 +725,21 @@ class ApiService {
     }
   }
 
+  async saveGroups(groups) {
+    if (!this.shouldUseBackend()) {
+      localStorage.setItem('tokenGroups', JSON.stringify(groups));
+      return { success: true, message: '分组保存成功' };
+    }
+
+    try {
+      const response = await apiClient.post('/api/token-groups/sync', { groups });
+      return response.data;
+    } catch (error) {
+      console.error('保存Token分组失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // 收藏任务相关 API
   async getFavoriteTasks() {
     if (!this.shouldUseBackend()) {

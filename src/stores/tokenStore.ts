@@ -262,6 +262,7 @@ export const useTokenStore = defineStore("tokens", () => {
             server: updates.server,
             remark: updates.remark,
             avatar: updates.avatar,
+            service_expiry: updates.serviceExpiry,
           });
         }
       } catch (error) {
@@ -1490,6 +1491,7 @@ export const useTokenStore = defineStore("tokens", () => {
               avatar: token.avatar,
               isActive: token.is_active,
               sortOrder: token.sort_order,
+              serviceExpiry: token.service_expiry,
               createdAt: token.created_at,
               updatedAt: token.updated_at
             });
@@ -1505,6 +1507,7 @@ export const useTokenStore = defineStore("tokens", () => {
             name: g.name,
             color: g.color,
             tokenIds: g.token_ids || [],
+            sortOrder: g.sort_order,
             createdAt: g.created_at,
             updatedAt: g.updated_at
           }));
@@ -1608,7 +1611,8 @@ export const useTokenStore = defineStore("tokens", () => {
           await apiService.updateTokenGroup(groupId, {
             name: group.name,
             color: group.color,
-            token_ids: group.tokenIds
+            token_ids: group.tokenIds,
+            sort_order: group.sortOrder
           });
         }
       } catch (error) {
@@ -1702,6 +1706,37 @@ export const useTokenStore = defineStore("tokens", () => {
     });
   };
 
+  /**
+   * 批量更新分组排序
+   */
+  const updateGroupsOrder = async (groupOrders: { id: string; sortOrder: number }[]) => {
+    groupOrders.forEach((item) => {
+      const group = tokenGroups.value.find((g) => g.id === item.id);
+      if (group) {
+        group.sortOrder = item.sortOrder;
+        group.updatedAt = new Date().toISOString();
+      }
+    });
+
+    // 同步到后端
+    try {
+      const config = (await import('@/config')).default;
+      if (config.api.useBackend) {
+        const apiService = (await import('@/services/apiService')).default;
+        const groupsToSave = tokenGroups.value.map((g, index) => ({
+          id: g.id,
+          name: g.name,
+          color: g.color,
+          token_ids: g.tokenIds,
+          sort_order: g.sortOrder !== undefined ? g.sortOrder : index
+        }));
+        await apiService.saveGroups(groupsToSave);
+      }
+    } catch (error) {
+      tokenLogger.error('批量更新分组排序同步到后端失败:', error);
+    }
+  };
+
   return {
     // 状态
     gameTokens,
@@ -1789,6 +1824,7 @@ export const useTokenStore = defineStore("tokens", () => {
     createTokenGroup,
     deleteTokenGroup,
     updateTokenGroup,
+    updateGroupsOrder,
     addTokenToGroup,
     removeTokenFromGroup,
     getTokenGroups,

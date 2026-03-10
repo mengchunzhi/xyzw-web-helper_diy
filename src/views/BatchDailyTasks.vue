@@ -136,7 +136,7 @@
                 </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap">
                   <div
-                    v-for="group in tokenGroups"
+                    v-for="group in sortedTokenGroups"
                     :key="group.id"
                     @click="toggleGroupSelection(group.id)"
                     :style="{
@@ -1184,7 +1184,7 @@
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
                 <n-button
-                  v-for="group in tokenGroups"
+                  v-for="group in sortedTokenGroups"
                   :key="group.id"
                   size="small"
                   @click="
@@ -1205,7 +1205,7 @@
                 >
                   {{ group.name }}
                 </n-button>
-                <div v-if="tokenGroups.length === 0" style="font-size: 12px; color: #ccc;">
+                <div v-if="sortedTokenGroups.length === 0" style="font-size: 12px; color: #ccc;">
                   暂无分组
                 </div>
               </div>
@@ -2009,7 +2009,7 @@
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
                 <n-button
-                  v-for="group in tokenGroups"
+                  v-for="group in sortedTokenGroups"
                   :key="group.id"
                   size="small"
                   :type="taskScheduleSelectedGroupIds.includes(group.id) ? 'primary' : 'default'"
@@ -2415,7 +2415,7 @@
           "
         >
           <div
-            v-for="group in tokenGroups"
+            v-for="(group, index) in sortedTokenGroups"
             :key="group.id"
             style="
               padding: 12px;
@@ -2562,25 +2562,43 @@
 
               <!-- 操作按钮 -->
               <div
-                style="display: flex; gap: 8px"
+                style="display: flex; gap: 8px; flex-direction: column"
                 v-if="editingGroupId !== group.id"
               >
-                <n-button size="small" @click="startEditGroup(group.id)">
-                  编辑
-                </n-button>
-                <n-button
-                  size="small"
-                  type="error"
-                  @click="deleteGroup(group.id)"
-                >
-                  删除
-                </n-button>
+                <div style="display: flex; gap: 4px">
+                  <n-button 
+                    size="tiny" 
+                    :disabled="index === 0"
+                    @click="moveGroupUp(index)"
+                  >
+                    ↑ 上移
+                  </n-button>
+                  <n-button 
+                    size="tiny" 
+                    :disabled="index === sortedTokenGroups.length - 1"
+                    @click="moveGroupDown(index)"
+                  >
+                    ↓ 下移
+                  </n-button>
+                </div>
+                <div style="display: flex; gap: 8px">
+                  <n-button size="small" @click="startEditGroup(group.id)">
+                    编辑
+                  </n-button>
+                  <n-button
+                    size="small"
+                    type="error"
+                    @click="deleteGroup(group.id)"
+                  >
+                    删除
+                  </n-button>
+                </div>
               </div>
             </div>
           </div>
 
           <div
-            v-if="tokenGroups.length === 0"
+            v-if="sortedTokenGroups.length === 0"
             style="text-align: center; padding: 24px; color: #86909c"
           >
             暂无分组，请创建一个新分组
@@ -5574,6 +5592,59 @@ const cancelEditGroup = () => {
   editingGroupId.value = null;
   editingGroupName.value = "";
   editingGroupColor.value = "";
+};
+
+/**
+ * 排序后的分组列表
+ */
+const sortedTokenGroups = computed(() => {
+  return [...tokenGroups.value].sort((a, b) => {
+    const orderA = a.sortOrder !== undefined ? a.sortOrder : 0;
+    const orderB = b.sortOrder !== undefined ? b.sortOrder : 0;
+    return orderA - orderB;
+  });
+});
+
+/**
+ * 上移分组
+ */
+const moveGroupUp = async (index) => {
+  if (index <= 0) return;
+  
+  const groups = sortedTokenGroups.value;
+  const currentGroup = groups[index];
+  const prevGroup = groups[index - 1];
+  
+  const currentOrder = currentGroup.sortOrder !== undefined ? currentGroup.sortOrder : index;
+  const prevOrder = prevGroup.sortOrder !== undefined ? prevGroup.sortOrder : index - 1;
+  
+  await tokenStore.updateGroupsOrder([
+    { id: currentGroup.id, sortOrder: prevOrder },
+    { id: prevGroup.id, sortOrder: currentOrder }
+  ]);
+  
+  message.success("分组顺序已更新");
+};
+
+/**
+ * 下移分组
+ */
+const moveGroupDown = async (index) => {
+  const groups = sortedTokenGroups.value;
+  if (index >= groups.length - 1) return;
+  
+  const currentGroup = groups[index];
+  const nextGroup = groups[index + 1];
+  
+  const currentOrder = currentGroup.sortOrder !== undefined ? currentGroup.sortOrder : index;
+  const nextOrder = nextGroup.sortOrder !== undefined ? nextGroup.sortOrder : index + 1;
+  
+  await tokenStore.updateGroupsOrder([
+    { id: currentGroup.id, sortOrder: nextOrder },
+    { id: nextGroup.id, sortOrder: currentOrder }
+  ]);
+  
+  message.success("分组顺序已更新");
 };
 
 /**
