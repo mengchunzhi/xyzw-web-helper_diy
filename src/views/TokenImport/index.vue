@@ -1047,7 +1047,9 @@ const openExpiryModal = (token) => {
     if (isNaN(date.getTime())) {
       expiryForm.serviceExpiry = null;
     } else {
-      expiryForm.serviceExpiry = date.getTime();
+      // 修复：使用 UTC 时间，避免时区偏移
+      const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      expiryForm.serviceExpiry = utcDate.getTime();
     }
   } else {
     expiryForm.serviceExpiry = null;
