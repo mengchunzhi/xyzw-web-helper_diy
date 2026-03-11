@@ -1013,8 +1013,11 @@ const isPaidToken = (tokenId) => {
 const getDaysRemaining = (expiryDate) => {
   if (!expiryDate) return null;
   const expiry = new Date(expiryDate);
+  // 修复：使用 UTC 时间计算，避免时区偏移
   const now = new Date();
-  const diffTime = expiry.getTime() - now.getTime();
+  const nowUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const expiryUTC = new Date(Date.UTC(expiry.getUTCFullYear(), expiry.getUTCMonth(), expiry.getUTCDate()));
+  const diffTime = expiryUTC.getTime() - nowUTC.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
 };
@@ -1062,10 +1065,11 @@ const saveExpiry = async () => {
   
   let expiryDate = null;
   if (expiryForm.serviceExpiry) {
+    // 修复：直接使用 UTC 时间，避免时区偏移
     const date = new Date(expiryForm.serviceExpiry);
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const day = date.getUTCDate();
     expiryDate = new Date(Date.UTC(year, month, day, 23, 59, 59)).toISOString();
   }
   
