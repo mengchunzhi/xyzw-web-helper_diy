@@ -7,24 +7,6 @@ import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
 import { supabase } from '../config/supabase.js';
 import { BonEncoder, BonDecoder, encodeBon, decodeBon, autoDecrypt, bon, getEnc } from '../utils/bonProtocol.js';
-import { buildCommandParams, gameCommands } from '../utils/gameCommands.js';
-
-/**
- * 战斗相关命令列表（需要注入 battleVersion）
- * 与前端 tokenStore.ts 保持一致
- */
-const battleCommands = [
-  'fight_startareaarena',
-  'fight_startpvp',
-  'fight_starttower',
-  'fight_startboss',
-  'fight_startlegionboss',
-  'fight_startdungeon',
-  'fight_startchallengemap',
-  'fight_startchallengemapstage',
-  'fight_startnightmare',
-  'fight_startnightmarestage',
-];
 
 /**
  * 错误码映射表
@@ -69,7 +51,6 @@ const errorCodeMap = {
  * 响应命令映射表
  * 用于处理服务器响应命令与原始请求命令不匹配的情况
  * 当服务器返回 cmd: "xxxresp" 而非 resp 字段时，需要此映射才能正确匹配 Promise
- * 与前端 xyzwWebSocket.js responseToCommandMap 保持一致
  */
 const responseToCommandMap = {
   // 同步响应（一对多）
@@ -79,7 +60,6 @@ const responseToCommandMap = {
   // 日常任务、挂机、签到相关（后端定时任务常用）
   system_claimhanguprewardresp: ['system_claimhangupreward'],
   task_claimdailyrewardresp: ['task_claimdailyreward'],
-  task_claimweekrewardresp: ['task_claimweekreward'],
   legion_signinresp: ['legion_signin'],
 
   // 罐子相关
@@ -93,17 +73,11 @@ const responseToCommandMap = {
   fight_starttowerresp: ['fight_starttower'],
   arena_getareatargetresp: ['arena_getareatarget'],
   arena_startarearesp: ['arena_startarea'],
-  arena_getarearankresp: ['arena_getarearank'],
   fight_startareaarenaresp: ['fight_startareaarena'],
-  fight_startpvpresp: ['fight_startpvp'],
-  fight_startbossresp: ['fight_startboss'],
-  fight_startlegionbossresp: ['fight_startlegionboss'],
   legion_getinforesp: ['legion_getinfo'],
   legion_getinforresp: ['legion_getinfo'], // 服务端可能的拼写变体
   legion_claimpayloadtaskresp: ['legion_claimpayloadtask'],
   legion_claimpayloadtaskprogressresp: ['legion_claimpayloadtaskprogress'],
-  legion_getarearankresp: ['legion_getarearank'],
-  legionwar_getgoldmonthwarrankresp: ['legionwar_getgoldmonthwarrank'],
 
   // 阵容、竞技场切换
   presetteam_getinforesp: ['presetteam_getinfo'],
@@ -114,8 +88,6 @@ const responseToCommandMap = {
   evotower_fightresp: ['evotower_fight'],
   evotower_readyfightresp: ['evotower_readyfight'],
   evotower_claimrewardresp: ['evotower_claimreward'],
-  evotower_getlegionjoinmembersresp: ['evotower_getlegionjoinmembers'],
-  evotower_claimtaskresp: ['evotower_claimtask'],
   mergeboxinforesp: ['mergebox_getinfo'],
   mergebox_claimfreeenergyresp: ['mergebox_claimfreeenergy'],
   mergebox_openboxresp: ['mergebox_openbox'],
@@ -126,15 +98,6 @@ const responseToCommandMap = {
 
   // 角色信息（爬塔刷新体力等）
   role_getroleinforesp: ['role_getroleinfo'],
-  role_gettargetteamresp: ['role_gettargetteam'],
-
-  // 战斗版本号获取（与前端一致）
-  fight_startlevelresp: ['fight_startlevel'],
-
-  // 通行证奖励领取
-  activity_recyclewarorderrewardclaimresp: ['activity_recyclewarorderrewardclaim'],
-  activity_warorderclaimresp: ['activity_recyclewarorderrewardclaim'],
-  activity_getresp: ['activity_get'],
 
   // 换皮闯关
   towers_getinforesp: ['towers_getinfo'],
@@ -143,69 +106,18 @@ const responseToCommandMap = {
 
   // 开箱、商店等
   item_openboxresp: ['item_openbox', 'item_batchclaimboxpointreward'],
-  item_openpackresp: ['item_openpack'],
   store_buyresp: ['store_purchase'],
   legion_storebuygoodsresp: ['legion_storebuygoods'],
   collection_claimfreerewardresp: ['collection_claimfreereward'],
-  collection_goodslistresp: ['collection_goodslist'],
   legacy_claimhangupresp: ['legacy_claimhangup'],
   legacy_getinforesp: ['legacy_getinfo'],
   legacy_sendgiftresp: ['legacy_sendgift'],
   legacy_getgiftsresp: ['legacy_getgifts'],
   hero_recruitresp: ['hero_recruit'],
-  hero_heroupgradestarresp: ['hero_heroupgradestar'],
   bosstower_getinforesp: ['bosstower_getinfo'],
   bosstower_startbossresp: ['bosstower_startboss'],
   bosstower_startboxresp: ['bosstower_startbox'],
-  bosstower_gethelprankresp: ['bosstower_gethelprank'],
   discount_getdiscountinforesp: ['discount_getdiscountinfo'],
-
-  // 邮件
-  mail_claimallattachmentresp: ['mail_claimallattachment'],
-
-  // 数据版本
-  system_getdatabundleverresp: ['system_getdatabundlever'],
-
-  // 装备
-  equipment_quenchresp: ['equipment_quench'],
-
-  // 排行榜
-  rank_getserverrankresp: ['rank_getserverrank'],
-
-  // 噩梦
-  nightmare_getroleinforesp: ['nightmare_getroleinfo'],
-
-  // 学习
-  studyresp: ['study_startgame'],
-
-  // 好友
-  friend_batchresp: ['friend_batch'],
-
-  // 盐路
-  saltroad_getwartyperesp: ['saltroad_getwartype'],
-  saltroad_getsaltroadwartotalrankresp: ['saltroad_getsaltroadwartotalrank'],
-
-  // 竞猜
-  warguess_getrankresp: ['warguess_getrank'],
-  warguess_startguessresp: ['warguess_startguess'],
-  warguess_getguesscoinrewardresp: ['warguess_getguesscoinreward'],
-
-  // 咸王宝库
-  matchteam_getroleteaminforesp: ['matchteam_getroleteaminfo'],
-
-  // 升星相关
-  book_upgraderesp: ['book_upgrade'],
-  book_claimpointrewardresp: ['book_claimpointreward'],
-
-  // 车辆相关
-  car_getrolecarresp: ['car_getrolecar'],
-  car_refreshresp: ['car_refresh'],
-  car_claimresp: ['car_claim'],
-  car_sendresp: ['car_send'],
-  car_getmemberhelpingcntresp: ['car_getmemberhelpingcnt'],
-  car_getmemberrankresp: ['car_getmemberrank'],
-  car_researchresp: ['car_research'],
-  car_claimpartconsumerewardresp: ['car_claimpartconsumereward'],
 }
 
 /**
@@ -214,29 +126,8 @@ const responseToCommandMap = {
 class WebSocketClient {
   constructor(tokenId, token, wsUrl) {
     this.tokenId = tokenId;
-    
-    // 解析 token：支持 JSON 格式（包含 roleToken/gameToken/token 字段）
-    let actualToken = token;
-    if (typeof token === 'string') {
-      try {
-        const tokenData = JSON.parse(token);
-        actualToken = tokenData.roleToken || tokenData.gameToken || tokenData.token || token;
-        logger.info(`[DEBUG] 从 JSON 中提取 token: ${actualToken.substring(0, 50)}...`);
-      } catch (e) {
-        // 不是 JSON，直接使用原始 token
-        logger.info(`[DEBUG] token 不是 JSON 格式，直接使用`);
-      }
-    }
-    
-    this.token = actualToken;
-    this.wsUrl = wsUrl || `wss://xxz-xyzw.hortorgames.com/agent?p=${encodeURIComponent(actualToken)}&e=x&lang=chinese`;
-    
-    // 调试：打印 token 和 URL
-    logger.info(`[DEBUG] WebSocketClient 构造函数:`);
-    logger.info(`[DEBUG] tokenId: ${tokenId}`);
-    logger.info(`[DEBUG] actualToken 长度: ${actualToken ? actualToken.length : 0}, 前50字符: ${actualToken ? actualToken.substring(0, 50) : 'null'}`);
-    logger.info(`[DEBUG] wsUrl: ${this.wsUrl.substring(0, 100)}...`);
-    
+    this.token = token;
+    this.wsUrl = wsUrl || `wss://xxz-xyzw.hortorgames.com/agent?p=${encodeURIComponent(token)}&e=x&lang=chinese`;
     this.socket = null;
     this.ack = 0;
     this.seq = 0;
@@ -256,8 +147,6 @@ class WebSocketClient {
     this.reconnectTimerId = null;
     this.reconnectCount = 0;
     this.maxReconnectAttempts = 5;
-    // 战斗版本号（与前端 tokenStore.ts 保持一致）
-    this.battleVersion = null;
   }
 
   /**
@@ -342,35 +231,17 @@ class WebSocketClient {
 
   /**
    * 解析二进制数据（BON协议 + 加密）
-   * 与前端 bonProtocol.js ProtoMsg.rawData 保持一致
    */
   _parseBinaryData(data) {
     try {
       // 转换为Buffer
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
       
-      // 使用bon.decode自动解密和解码整个消息包
+      // 使用bon.decode自动解密和解码
       const packet = bon.decode(buffer);
       
       if (packet && typeof packet === 'object') {
         logger.debug(`BON解码成功: cmd=${packet.cmd || 'unknown'}`);
-        
-        // ⭐ 关键：对 body 字段进行二次解码（与前端 ProtoMsg.rawData 保持一致）
-        // body 已经是解密后的数据，只需要解码不需要再次解密
-        if (packet.body && Buffer.isBuffer(packet.body)) {
-          try {
-            const decodedBody = bon.decodeRaw(packet.body);
-            packet.rawData = decodedBody;  // 与前端 ProtoMsg.rawData 一致
-            logger.debug(`消息体二次解码成功: cmd=${packet.cmd || 'unknown'}`);
-          } catch (bodyError) {
-            logger.warn(`消息体二次解码失败: ${bodyError.message}`);
-            packet.rawData = packet.body;
-          }
-        } else if (packet.body) {
-          // body 已经是解码后的数据
-          packet.rawData = packet.body;
-        }
-        
         return packet;
       } else {
         logger.warn(`BON解码返回非对象: ${typeof packet}`);
@@ -413,26 +284,13 @@ class WebSocketClient {
     // 游戏协议中 code 为 0/undefined 表示成功；-1 常表示成功或无额外数据（如加钟、切换阵容）
     const isSuccess = packet.code === 0 || packet.code === undefined || packet.code === -1;
 
-    // 响应数据优先级: rawData > body（与前端 xyzwWebSocket.js 保持一致）
-    const responseBody = packet.rawData !== undefined ? packet.rawData : packet.body;
-
-    // 处理 battleVersion 更新（与前端 stores/events/role.ts 保持一致）
-    const cmd = packet.cmd;
-    if (cmd === 'fight_startlevelresp' || cmd === 'fight_startlevel') {
-      const body = responseBody || packet;
-      if (body?.battleData?.version) {
-        this.battleVersion = body.battleData.version;
-        logger.debug(`更新 battleVersion: ${this.battleVersion} [${this.tokenId}]`);
-      }
-    }
-
     // 处理Promise响应 - 优先使用resp字段进行响应匹配
     if (packet.resp !== undefined && this.promises[packet.resp]) {
       const promise = this.promises[packet.resp];
       delete this.promises[packet.resp];
 
       if (isSuccess) {
-        promise.resolve(responseBody || packet);
+        promise.resolve(packet.body || packet);
       } else {
         const errorDesc = errorCodeMap[packet.code] || packet.hint || '未知错误';
         promise.reject(new Error(`服务器错误: ${packet.code} - ${errorDesc}`));
@@ -441,6 +299,7 @@ class WebSocketClient {
     }
 
     // 处理响应命令映射 - 当服务器响应命令与原始请求命令不匹配时
+    const cmd = packet.cmd;
     if (cmd) {
       const respCmdKey = typeof cmd === 'string' ? cmd.toLowerCase() : cmd;
       let originalCmds = responseToCommandMap[respCmdKey];
@@ -456,7 +315,7 @@ class WebSocketClient {
             delete this.promises[requestId];
             
             if (isSuccess) {
-              promiseData.resolve(responseBody || packet);
+              promiseData.resolve(packet.body || packet);
             } else {
               const errorDesc = errorCodeMap[packet.code] || packet.hint || '未知错误';
               promiseData.reject(new Error(`服务器错误: ${packet.code} - ${errorDesc}`));
@@ -518,24 +377,10 @@ class WebSocketClient {
 
   /**
    * 构建数据包（BON协议）
-   * 与前端 xyzwWebSocket.js CommandRegistry.build() 保持一致
    */
   _buildPacket(cmd, params = {}, seq) {
-    // 1. 合并默认参数（与前端一致）
-    let mergedParams = buildCommandParams(cmd, params);
-    
-    // 2. 为战斗相关命令注入 battleVersion（与前端 tokenStore.ts 保持一致）
-    if (battleCommands.includes(cmd)) {
-      if (this.battleVersion) {
-        mergedParams = { battleVersion: this.battleVersion, ...mergedParams };
-        logger.debug(`⚔️ [战斗命令] 注入 battleVersion: ${this.battleVersion} [${cmd}]`);
-      } else {
-        logger.warn(`⚠️ [战斗命令] battleVersion 未设置，可能导致战斗请求失败 [${cmd}]`);
-      }
-    }
-    
-    // 3. body 需要先进行 BON 编码（与前端一致）
-    const encodedBody = bon.encode(mergedParams);
+    // body 需要先进行 BON 编码（与前端一致）
+    const encodedBody = bon.encode(params);
     
     return {
       cmd,
@@ -551,21 +396,12 @@ class WebSocketClient {
    */
   _sendPacket(packet) {
     try {
-      // 调试：打印原始数据包
-      logger.info(`[DEBUG] 发送数据包: cmd=${packet.cmd}, ack=${packet.ack}, seq=${packet.seq}`);
-      logger.info(`[DEBUG] body 类型: ${Buffer.isBuffer(packet.body) ? 'Buffer' : typeof packet.body}`);
-      if (Buffer.isBuffer(packet.body)) {
-        logger.info(`[DEBUG] body 长度: ${packet.body.length}, 前20字节: ${packet.body.slice(0, 20).toString('hex')}`);
-      }
-      
       // 1. 先对整个消息包进行 BON 编码
       const bonData = bon.encode(packet);
-      logger.info(`[DEBUG] BON编码后长度: ${bonData.length}, 前20字节: ${bonData.slice(0, 20).toString('hex')}`);
       
       // 2. 再使用 x 加密方案进行加密
       const x = getEnc('x');
       const encryptedData = x.encrypt(bonData);
-      logger.info(`[DEBUG] 加密后长度: ${encryptedData.length}, 前8字节: ${encryptedData.slice(0, 8).toString('hex')}`);
       
       this.socket.send(encryptedData);
       

@@ -597,10 +597,6 @@ export const bon = {
     const decrypted = autoDecrypt(bytes);
     _dec.reset(decrypted);
     return _dec.decode();
-  },
-  decodeRaw: (bytes) => {
-    _dec.reset(bytes);
-    return _dec.decode();
   }
 };
 
