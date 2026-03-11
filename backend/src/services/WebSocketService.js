@@ -321,17 +321,35 @@ class WebSocketClient {
 
   /**
    * 解析二进制数据（BON协议 + 加密）
+   * 与前端 bonProtocol.js ProtoMsg.rawData 保持一致
    */
   _parseBinaryData(data) {
     try {
       // 转换为Buffer
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
       
-      // 使用bon.decode自动解密和解码
+      // 使用bon.decode自动解密和解码整个消息包
       const packet = bon.decode(buffer);
       
       if (packet && typeof packet === 'object') {
         logger.debug(`BON解码成功: cmd=${packet.cmd || 'unknown'}`);
+        
+        // ⭐ 关键：对 body 字段进行二次解码（与前端 ProtoMsg.rawData 保持一致）
+        // body 已经是解密后的数据，只需要解码不需要再次解密
+        if (packet.body && Buffer.isBuffer(packet.body)) {
+          try {
+            const decodedBody = bon.decodeRaw(packet.body);
+            packet.rawData = decodedBody;  // 与前端 ProtoMsg.rawData 一致
+            logger.debug(`消息体二次解码成功: cmd=${packet.cmd || 'unknown'}`);
+          } catch (bodyError) {
+            logger.warn(`消息体二次解码失败: ${bodyError.message}`);
+            packet.rawData = packet.body;
+          }
+        } else if (packet.body) {
+          // body 已经是解码后的数据
+          packet.rawData = packet.body;
+        }
+        
         return packet;
       } else {
         logger.warn(`BON解码返回非对象: ${typeof packet}`);
@@ -374,10 +392,13 @@ class WebSocketClient {
     // 游戏协议中 code 为 0/undefined 表示成功；-1 常表示成功或无额外数据（如加钟、切换阵容）
     const isSuccess = packet.code === 0 || packet.code === undefined || packet.code === -1;
 
+    // 响应数据优先级: rawData > body（与前端 xyzwWebSocket.js 保持一致）
+    const responseBody = packet.rawData !== undefined ? packet.rawData : packet.body;
+
     // 处理 battleVersion 更新（与前端 stores/events/role.ts 保持一致）
     const cmd = packet.cmd;
     if (cmd === 'fight_startlevelresp' || cmd === 'fight_startlevel') {
-      const body = packet.body || packet;
+      const body = responseBody || packet;
       if (body?.battleData?.version) {
         this.battleVersion = body.battleData.version;
         logger.debug(`更新 battleVersion: ${this.battleVersion} [${this.tokenId}]`);
@@ -390,7 +411,7 @@ class WebSocketClient {
       delete this.promises[packet.resp];
 
       if (isSuccess) {
-        promise.resolve(packet.body || packet);
+        promise.resolve(responseBody || packet);
       } else {
         const errorDesc = errorCodeMap[packet.code] || packet.hint || '未知错误';
         promise.reject(new Error(`服务器错误: ${packet.code} - ${errorDesc}`));
@@ -414,7 +435,7 @@ class WebSocketClient {
             delete this.promises[requestId];
             
             if (isSuccess) {
-              promiseData.resolve(packet.body || packet);
+              promiseData.resolve(responseBody || packet);
             } else {
               const errorDesc = errorCodeMap[packet.code] || packet.hint || '未知错误';
               promiseData.reject(new Error(`服务器错误: ${packet.code} - ${errorDesc}`));
