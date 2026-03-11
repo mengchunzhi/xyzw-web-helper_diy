@@ -639,8 +639,18 @@ class TaskExecutor {
         scene: ''
       }, 15000);
       
+      // 调试：打印完整的响应数据
+      logger.info(`[DEBUG] roleInfo 类型: ${typeof roleInfo}`);
+      logger.info(`[DEBUG] roleInfo 内容: ${JSON.stringify(roleInfo, null, 2).substring(0, 2000)}`);
+      
       const role = roleInfo?.role || roleInfo;
+      logger.info(`[DEBUG] role 类型: ${typeof role}`);
+      logger.info(`[DEBUG] role.items 类型: ${typeof role?.items}`);
+      logger.info(`[DEBUG] role.items 内容: ${JSON.stringify(role?.items).substring(0, 500)}`);
+      
       const ticketCount = role?.items?.[1007]?.quantity || 0;
+      logger.info(`[DEBUG] 门票数量: ${ticketCount}`);
+      
       this.addStep(`当前咸神门票: ${ticketCount}`);
       
       if (ticketCount <= 0) {
