@@ -940,6 +940,12 @@ export class XyzwWebSocketClient {
         const bin = this.registry.encodePacket(raw);
         this.socket?.send(bin);
 
+        // 调试：输出数据包的十六进制格式
+        if (bin instanceof Uint8Array) {
+          const hexArray = Array.from(bin).slice(0, 50);
+          console.log(`[前端发送] cmd=${raw.cmd}, seq=${raw.seq}, 前50字节hex: ${hexArray.map(b => b.toString(16).padStart(2)).join(' ')}`);
+        }
+
         if (this.showMsg || task.cmd === "heart_beat") {
           wsLogger.wsMessage("local", task.cmd, false);
           if (this.showMsg) {
