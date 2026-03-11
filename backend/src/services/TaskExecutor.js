@@ -14,6 +14,7 @@ class TaskExecutor {
     this.token = token;
     this.taskSettings = taskSettings;
     this.steps = [];
+    this.battleVersion = null;
   }
 
   /**
@@ -27,7 +28,39 @@ class TaskExecutor {
    * 发送消息并等待响应
    */
   async send(cmd, params = {}, timeout = 5000) {
+    // 为战斗相关命令自动注入 battleVersion
+    const battleCommands = [
+      'fight_startareaarena',
+      'fight_startpvp',
+      'fight_starttower',
+      'fight_startboss',
+      'fight_startlegionboss',
+      'fight_startdungeon',
+    ];
+    
+    if (battleCommands.includes(cmd) && this.battleVersion) {
+      params = { battleVersion: this.battleVersion, ...params };
+      logger.debug(`注入 battleVersion: ${this.battleVersion} [${cmd}]`);
+    }
+    
     return await this.wsClient.sendWithPromise(cmd, params, timeout);
+  }
+
+  /**
+   * 获取 battleVersion（战斗命令必需）
+   */
+  async initBattleVersion() {
+    try {
+      const res = await this.send('fight_startlevel', {}, 5000);
+      if (res && res.battleData && res.battleData.version) {
+        this.battleVersion = res.battleData.version;
+        logger.debug(`获取 battleVersion: ${this.battleVersion}`);
+        return true;
+      }
+    } catch (err) {
+      logger.warn(`获取 battleVersion 失败: ${err.message}`);
+    }
+    return false;
   }
 
   /**
@@ -679,6 +712,9 @@ class TaskExecutor {
         this.addStep('咸神门票不足，无法进行竞技场战斗', 'warning');
         return;
       }
+
+      // 获取 battleVersion（战斗命令必需）
+      await this.initBattleVersion();
 
       // 2. 获取并切换阵容
       let originalFormation = null;
