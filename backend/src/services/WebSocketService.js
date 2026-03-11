@@ -530,12 +530,21 @@ class WebSocketClient {
    */
   _sendPacket(packet) {
     try {
+      // 调试：打印原始数据包
+      logger.info(`[DEBUG] 发送数据包: cmd=${packet.cmd}, ack=${packet.ack}, seq=${packet.seq}`);
+      logger.info(`[DEBUG] body 类型: ${Buffer.isBuffer(packet.body) ? 'Buffer' : typeof packet.body}`);
+      if (Buffer.isBuffer(packet.body)) {
+        logger.info(`[DEBUG] body 长度: ${packet.body.length}, 前20字节: ${packet.body.slice(0, 20).toString('hex')}`);
+      }
+      
       // 1. 先对整个消息包进行 BON 编码
       const bonData = bon.encode(packet);
+      logger.info(`[DEBUG] BON编码后长度: ${bonData.length}, 前20字节: ${bonData.slice(0, 20).toString('hex')}`);
       
       // 2. 再使用 x 加密方案进行加密
       const x = getEnc('x');
       const encryptedData = x.encrypt(bonData);
+      logger.info(`[DEBUG] 加密后长度: ${encryptedData.length}, 前8字节: ${encryptedData.slice(0, 8).toString('hex')}`);
       
       this.socket.send(encryptedData);
       
